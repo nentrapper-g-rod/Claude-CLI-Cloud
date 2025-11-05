@@ -1,0 +1,3840 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Claude CLI Terminal</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/xterm@5.3.0/css/xterm.css" />
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .header {
+            background: #252525;
+            padding: 15px 20px;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-shrink: 0;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        .sidebar {
+            width: 400px;
+            min-width: 250px;
+            max-width: 800px;
+            background: #252525;
+            border-right: 1px solid #3a3a3a;
+            overflow-y: auto;
+            flex-shrink: 0;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 5px;
+            height: 100%;
+            cursor: ew-resize;
+            background: transparent;
+            z-index: 10;
+        }
+
+        .sidebar-resizer:hover,
+        .sidebar-resizer.resizing {
+            background: #4a9eff;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #3a3a3a;
+            font-weight: 600;
+        }
+
+        .session-list {
+            padding: 10px;
+            flex: 1;
+            overflow-y: auto;
+        }
+
+        .session-item {
+            padding: 10px;
+            margin-bottom: 5px;
+            background: #2d2d2d;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .session-item:hover {
+            background: #3a3a3a;
+        }
+
+        .session-item.active {
+            background: #4a9eff;
+        }
+
+        .session-preview {
+            font-size: 14px;
+            margin-bottom: 5px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .session-meta {
+            font-size: 12px;
+            color: #b0b0b0;
+        }
+
+        .terminal-container {
+            flex: 1;
+            padding: 20px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            min-height: 0; /* Allow flex shrinking */
+        }
+
+        #terminal {
+            flex: 1;
+            background: #000;
+            border-radius: 5px;
+            padding: 10px;
+            min-height: 0; /* Allow flex shrinking */
+            height: 100%;
+            width: 100%;
+        }
+
+        .tab {
+            padding: 10px 15px;
+            background: #1a1a1a;
+            color: #b0b0b0;
+            border: none;
+            border-right: 1px solid #3a3a3a;
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .tab:hover {
+            background: #2a2a2a;
+        }
+
+        .tab.active {
+            background: #000;
+            color: #4a9eff;
+            border-bottom: 2px solid #4a9eff;
+        }
+
+        .tab-close {
+            margin-left: 5px;
+            color: #999;
+            font-weight: bold;
+            cursor: pointer;
+        }
+
+        .tab-close:hover {
+            color: #ff4a4a;
+        }
+
+        /* Connection settings popover */
+        .connection-settings-popover {
+            position: absolute;
+            background: #2a2a2a;
+            border: 1px solid #4a9eff;
+            border-radius: 8px;
+            padding: 10px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+            z-index: 10000;
+            min-width: 200px;
+            display: none;
+        }
+
+        .connection-settings-popover.show {
+            display: block;
+        }
+
+        .connection-settings-header {
+            font-size: 14px;
+            font-weight: 600;
+            color: #4a9eff;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+
+        .connection-settings-btn {
+            width: 100%;
+            padding: 10px 15px;
+            background: #3a3a3a;
+            color: #e0e0e0;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            text-align: left;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-bottom: 8px;
+            transition: background 0.2s;
+        }
+
+        .connection-settings-btn:last-child {
+            margin-bottom: 0;
+        }
+
+        .connection-settings-btn:hover {
+            background: #4a4a4a;
+        }
+
+        .connection-settings-btn.restart:hover {
+            background: #3a6e3a;
+        }
+
+        .connection-settings-btn.update:hover {
+            background: #3a5a9e;
+        }
+
+        .connection-settings-btn.delete:hover {
+            background: #9e3a3a;
+        }
+
+        /* Connection tabs styling */
+        .connection-tab {
+            padding: 8px 16px;
+            background: #2a2a2a;
+            color: #e0e0e0;
+            border: none;
+            border-radius: 8px 8px 0 0;
+            cursor: pointer;
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            transition: background 0.2s;
+            margin-right: 5px;
+        }
+
+        .connection-tab:hover {
+            background: #353535;
+        }
+
+        .connection-tab.active {
+            background: #4a9eff;
+            color: #fff;
+        }
+
+        .connection-tab-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+
+        .connection-tab-status.connected {
+            background: #3a9e3a;
+        }
+
+        .connection-tab-status.disconnected {
+            background: #9e3a3a;
+        }
+
+        .connection-tab-settings {
+            color: #ccc;
+            cursor: pointer;
+            font-size: 14px;
+            padding: 2px 4px;
+            border-radius: 3px;
+            transition: all 0.2s;
+        }
+
+        .connection-tab-settings:hover {
+            color: #4a9eff;
+            background: rgba(74, 158, 255, 0.1);
+        }
+
+        .connection-tab-close {
+            margin-left: 5px;
+            color: #ccc;
+            font-weight: bold;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        .connection-tab-close:hover {
+            color: #ff4a4a;
+        }
+
+        .terminal-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #000;
+            border-radius: 5px;
+            padding: 10px;
+            display: none;
+        }
+
+        .terminal-wrapper.active {
+            display: block;
+        }
+
+        .file-explorer-wrapper {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #1a1a1a;
+            border-radius: 5px;
+            padding: 10px;
+            display: none;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .file-explorer-wrapper.active {
+            display: flex;
+        }
+
+        .file-explorer-toolbar {
+            display: flex;
+            gap: 10px;
+            padding: 10px;
+            background: #2d2d2d;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .file-explorer-path {
+            flex: 1;
+            padding: 8px 12px;
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 5px;
+            color: #e0e0e0;
+            font-family: monospace;
+        }
+
+        .file-explorer-content {
+            flex: 1;
+            overflow-y: auto;
+            background: #000;
+            border-radius: 5px;
+            padding: 10px;
+        }
+
+        .file-item {
+            padding: 8px 12px;
+            margin: 2px 0;
+            border-radius: 3px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #e0e0e0;
+        }
+
+        .file-item:hover {
+            background: #2d2d2d;
+        }
+
+        .file-item.directory {
+            color: #4a9eff;
+        }
+
+        .file-item-icon {
+            width: 20px;
+            text-align: center;
+        }
+
+        .file-item-name {
+            flex: 1;
+        }
+
+        .file-item-size {
+            color: #888;
+            font-size: 12px;
+        }
+
+        .file-item-actions {
+            display: flex;
+            gap: 5px;
+        }
+
+        .file-action-btn {
+            padding: 4px 8px;
+            background: #3a3a3a;
+            border: none;
+            border-radius: 3px;
+            color: #e0e0e0;
+            cursor: pointer;
+            font-size: 11px;
+        }
+
+        .file-action-btn:hover {
+            background: #4a4a4a;
+        }
+
+        .xterm {
+            height: 100% !important;
+            width: 100% !important;
+        }
+
+        .xterm-viewport {
+            overflow-y: auto !important;
+        }
+
+        .status-message {
+            padding: 10px;
+            background: #2d2d2d;
+            border-radius: 5px;
+            margin-bottom: 10px;
+            text-align: center;
+        }
+
+        .project-section {
+            margin-bottom: 10px;
+        }
+
+        .project-header {
+            padding: 8px 10px;
+            background: #2d2d2d;
+            border-radius: 3px;
+            cursor: pointer;
+            font-weight: 500;
+            margin-bottom: 5px;
+        }
+
+        .project-header:hover {
+            background: #3a3a3a;
+        }
+
+        .directory-section {
+            margin-left: 15px;
+            margin-bottom: 5px;
+        }
+
+        .directory-header {
+            padding: 6px 10px;
+            background: #242424;
+            border-radius: 3px;
+            cursor: pointer;
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        .directory-content {
+            margin-left: 10px;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            color: #b0b0b0;
+        }
+
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.7);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .modal-content {
+            background: #252525;
+            padding: 20px;
+            border-radius: 10px;
+            width: 90%;
+            max-width: 500px;
+            border: 1px solid #3a3a3a;
+        }
+
+        .modal-header {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 8px;
+            background: #2d2d2d;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .modal-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .modal-buttons button {
+            flex: 1;
+            padding: 10px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <!-- Connection Modal -->
+    <div id="connectionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header" id="modalTitle">Add Connection</div>
+            <form id="connectionForm">
+                <div class="form-group">
+                    <label for="connName">Connection Name:</label>
+                    <input type="text" id="connName" required placeholder="e.g., My Server">
+                </div>
+                <div class="form-group">
+                    <label for="connHost">WebSocket Host:</label>
+                    <input type="text" id="connHost" required placeholder="e.g., example.com or 192.168.1.100">
+                </div>
+                <div class="form-group">
+                    <label for="connPort">WebSocket Port:</label>
+                    <input type="number" id="connPort" required placeholder="e.g., 8766" value="8766">
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" style="background: #4a9eff; color: white;">Save</button>
+                    <button type="button" id="cancelBtn" style="background: #555; color: white;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- New Session Modal -->
+    <div id="newSessionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">Create New Session</div>
+            <form id="newSessionForm">
+                <div class="form-group">
+                    <label for="sessionTitle">Session Title:</label>
+                    <input type="text" id="sessionTitle" required placeholder="e.g., Bug Fix for Login Feature">
+                </div>
+                <div class="form-group">
+                    <label for="sessionDirectory">Working Directory:</label>
+                    <input type="text" id="sessionDirectory" placeholder="e.g., /opt/myproject (leave empty for current directory)">
+                </div>
+                <div class="form-group">
+                    <label for="sessionPrompt">Initial Message (optional):</label>
+                    <textarea id="sessionPrompt" placeholder="Enter your first message to Claude..." style="min-height: 80px;"></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" style="background: #3a9e3a; color: white;">Create Session</button>
+                    <button type="button" id="cancelNewSessionBtn" style="background: #555; color: white;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Resume Session Modal -->
+    <div id="resumeSessionModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">🔄 Resume Session</div>
+            <div class="form-group">
+                <label>Select a directory to resume from:</label>
+                <div id="resumeSessionList" style="max-height: 400px; overflow-y: auto; margin-top: 10px;">
+                    <div class="loading">Loading sessions...</div>
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" id="cancelResumeSessionBtn" style="background: #555; color: white;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Settings Modal -->
+    <div id="settingsModal" class="modal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">⚙️ Settings</div>
+            <div class="form-group">
+                <label for="personalPreferences">Personal Preferences:</label>
+                <p style="font-size: 13px; color: #b0b0b0; margin-bottom: 10px;">
+                    Configure personal preferences that Claude should consider in all responses. This will be added to the system prompt when starting any Claude session.
+                </p>
+                <textarea
+                    id="personalPreferences"
+                    placeholder="Enter your preferences here. For example:
+- Use concise responses unless asked for detail
+- Prefer TypeScript over JavaScript
+- Use functional programming patterns
+- Avoid emojis in code comments"
+                    style="width: 100%; min-height: 200px; padding: 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-size: 14px; font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; resize: vertical;"></textarea>
+                <div style="background: #1a1a1a; border: 1px solid #3a3a3a; border-radius: 5px; padding: 12px; margin-top: 10px; font-size: 13px; color: #b0b0b0;">
+                    <strong style="color: #4a9eff; display: block; margin-bottom: 8px;">Example preferences:</strong>
+                    • I prefer direct, concise answers without excessive pleasantries<br>
+                    • When writing code, use descriptive variable names<br>
+                    • I work primarily with Python 3.11+ and modern JavaScript<br>
+                    • For web development, I prefer React with TypeScript<br>
+                    • Always include error handling in production code examples<br>
+                    • Use async/await instead of promises .then() syntax
+                </div>
+            </div>
+            <div class="modal-buttons">
+                <button id="saveSettingsBtn" style="background: #4a9eff; color: white;">💾 Save Settings</button>
+                <button id="clearSettingsBtn" style="background: #d9534f; color: white;">🗑️ Clear Settings</button>
+                <button id="cancelSettingsBtn" style="background: #555; color: white;">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Deploy Modal -->
+    <div id="deployModal" class="modal">
+        <div class="modal-content" style="max-width: 900px;">
+            <div class="modal-header">🚀 Deploy Bridge to New Server</div>
+            <div style="padding: 0 20px 20px 20px; overflow-y: auto; max-height: 70vh;">
+                <h3 style="color: #4a9eff; margin-top: 0;">Quick Deploy Command</h3>
+                <p style="color: #b0b0b0; margin-bottom: 10px;">Run this single command on your new server:</p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px; position: relative;">
+                    <code id="deployCommand" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">curl -fsSL http://100.94.187.56:8889/install | SOURCE_SERVER=http://100.94.187.56:8889 MACHINE_NAME="your-server" WS_PORT=8766 bash</code>
+                    <button id="copyDeployBtn" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px; background: #3a3a3a; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">📋 Copy</button>
+                </div>
+                <p style="color: #888; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">
+                    💡 The installer will prompt for your password (via sudo) when creating the systemd service.<br>
+                    🐛 Port 8766 automatically enables debug logging for troubleshooting.
+                </p>
+
+                <h3 style="color: #4a9eff;">What It Does</h3>
+                <ol style="color: #e0e0e0; line-height: 1.8;">
+                    <li>Downloads the bridge server from this machine</li>
+                    <li>Installs Python dependencies (websockets)</li>
+                    <li>Stops existing service if upgrading</li>
+                    <li>Creates systemd service with proper logging</li>
+                    <li>Configures machine name and WebSocket port</li>
+                    <li>Enables debug logging for port 8766</li>
+                    <li>Starts the bridge server automatically</li>
+                </ol>
+
+                <h3 style="color: #4a9eff;">Interactive Installation</h3>
+                <p style="color: #b0b0b0;">The installer will ask for:</p>
+                <ul style="color: #e0e0e0; line-height: 1.8;">
+                    <li><strong>Machine Name</strong> - Friendly name (e.g., "Production Server")</li>
+                    <li><strong>WebSocket Port</strong> - Default is 8766</li>
+                    <li><strong>Confirmation</strong> - To proceed with install</li>
+                </ul>
+
+                <h3 style="color: #4a9eff;">After Installation on New Server</h3>
+                <ol style="color: #e0e0e0; line-height: 1.8;">
+                    <li>The bridge will be running on the specified port (default: 8766)</li>
+                    <li>In your web terminal, click <strong>"➕ Add"</strong> connection</li>
+                    <li>Enter:
+                        <ul>
+                            <li>Name: The machine name you chose</li>
+                            <li>Host: New server's IP</li>
+                            <li>Port: 8766 (or what you chose)</li>
+                        </ul>
+                    </li>
+                    <li>Connect and use!</li>
+                </ol>
+
+                <h3 style="color: #4a9eff;">Service Management</h3>
+                <p style="color: #b0b0b0;">On the new server:</p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <code style="color: #e0e0e0; font-size: 13px; display: block; line-height: 1.8;">
+sudo systemctl start claude-bridge    <span style="color: #888;"># Start</span><br>
+sudo systemctl stop claude-bridge     <span style="color: #888;"># Stop</span><br>
+sudo systemctl status claude-bridge   <span style="color: #888;"># Status</span><br>
+sudo systemctl enable claude-bridge   <span style="color: #888;"># Start on boot</span>
+                    </code>
+                </div>
+
+                <h3 style="color: #4a9eff;">View Logs</h3>
+                <p style="color: #b0b0b0;">Logs are saved to <code style="background: #2d2d2d; padding: 2px 6px; border-radius: 3px;">~/.claude-bridge/bridge.log</code></p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <code style="color: #e0e0e0; font-size: 13px; display: block; line-height: 1.8;">
+tail -f ~/.claude-bridge/bridge.log   <span style="color: #888;"># Follow logs in real-time</span><br>
+tail -100 ~/.claude-bridge/bridge.log <span style="color: #888;"># View last 100 lines</span><br>
+grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug messages</span>
+                    </code>
+                </div>
+
+                <h3 style="color: #4a9eff;">Deployment Server</h3>
+                <p style="color: #b0b0b0;">Running on: <a href="http://100.94.187.56:8889" target="_blank" style="color: #4a9eff;">http://100.94.187.56:8889</a></p>
+                <p style="color: #888; font-size: 13px; margin-top: 10px;">
+                    💡 The deployment server is only needed during installation and can be stopped afterward.
+                </p>
+            </div>
+            <div class="modal-buttons">
+                <button id="cancelDeployBtn" style="background: #555; color: white;">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Connection Settings Popover -->
+    <div id="connectionSettingsPopover" class="connection-settings-popover">
+        <div class="connection-settings-header" id="connectionSettingsTitle">Connection Settings</div>
+        <button class="connection-settings-btn restart" onclick="handleRestartBridge()">
+            <span>🔄</span>
+            <span>Restart Bridge Server</span>
+        </button>
+        <button class="connection-settings-btn update" onclick="handleUpdateBridge()">
+            <span>⬆️</span>
+            <span>Update Bridge Server</span>
+        </button>
+        <button class="connection-settings-btn delete" onclick="handleDeleteConnection()">
+            <span>🗑️</span>
+            <span>Delete Connection</span>
+        </button>
+    </div>
+
+    <!-- Disk Details Popover -->
+    <div id="diskPopover" style="display: none; position: fixed; background: #2a2a2a; border: 1px solid #444; border-radius: 8px; padding: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10000; min-width: 700px; max-width: 90vw; max-height: 500px; color: #e0e0e0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #444; padding-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 16px;">Disk Usage (df -h)</h3>
+            <button onclick="closeDiskPopover()" style="background: none; border: none; color: #999; cursor: pointer; font-size: 20px; padding: 0; width: 24px; height: 24px;">&times;</button>
+        </div>
+        <div id="diskPopoverContent" style="font-size: 12px; overflow-x: auto; overflow-y: auto; max-height: 420px;">
+            <!-- Content will be dynamically populated -->
+        </div>
+    </div>
+
+    <div class="header">
+        <div class="header-title">
+            🖥️ Claude CLI Terminal
+            <span style="font-size: 0.7em; opacity: 0.7; margin-left: 10px;" id="versionInfo">Loading versions...</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 15px;">
+            <button id="settingsBtn" style="padding: 8px 16px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                ⚙️ Settings
+            </button>
+            <button id="deployBtn" style="padding: 8px 16px; background: #9e8a3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
+                🚀 Deploy
+            </button>
+            <label style="display: flex; align-items: center; gap: 5px; cursor: pointer;">
+                <input type="checkbox" id="skipPermissions" checked>
+                <span>Skip permissions</span>
+            </label>
+            <div id="connectionStatus">Connecting...</div>
+        </div>
+    </div>
+
+    <div class="main-container">
+        <div class="sidebar">
+            <div class="sidebar-header" id="sidebarHeader">Sessions</div>
+
+            <!-- Connection Manager -->
+            <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
+                <div style="margin-bottom: 10px; display: flex; gap: 5px;">
+                    <select id="connectionSelect" style="flex: 1; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; cursor: pointer;">
+                        <option value="">Select Connection...</option>
+                    </select>
+                    <button id="connectBtn" style="padding: 8px 16px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px; font-weight: 600;" title="Connect to selected server">
+                        🔌 Connect
+                    </button>
+                    <button id="refreshSessionsBtn" style="padding: 8px 12px; background: #4a9eff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;" title="Refresh sessions">
+                        🔄
+                    </button>
+                </div>
+                <div style="display: flex; gap: 5px;">
+                    <button id="addConnectionBtn" style="flex: 1; padding: 8px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px;">
+                        ➕ Add
+                    </button>
+                    <button id="editConnectionBtn" style="flex: 1; padding: 8px; background: #9e8a3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px;">
+                        ✏️ Edit
+                    </button>
+                    <button id="connectionSettingsBtn" style="flex: 1; padding: 8px; background: #4a9eff; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 12px;">
+                        ⚙️ Settings
+                    </button>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
+                <button id="newSessionBtn" style="width: 100%; padding: 10px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    ➕ New Session
+                </button>
+                <button id="resumeSessionBtn" style="width: 100%; padding: 10px; background: #6a8a9e; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    🔄 Resume Session
+                </button>
+                <button id="openShellBtn" style="width: 100%; padding: 10px; background: #4a9eff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    🖥️ Open Shell Terminal
+                </button>
+                <button id="fileExplorerBtn" style="width: 100%; padding: 10px; background: #9e8a3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; margin-bottom: 10px;">
+                    📁 File Explorer
+                </button>
+                <input type="file" id="fileInput" style="display: none;" multiple>
+                <button id="uploadFileBtn" style="width: 100%; padding: 10px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">
+                    📎 Upload Files
+                </button>
+            </div>
+
+            <!-- Connection name indicator -->
+            <div id="connectionNameIndicator" style="padding: 15px 10px 10px 10px; border-bottom: 1px solid #3a3a3a; text-align: center; display: none;">
+                <div style="color: #4a9eff; font-weight: 600; font-size: 14px;">📡 <span id="activeConnectionName"></span></div>
+            </div>
+
+            <div id="sessionsList" class="session-list">
+                <div class="loading">Loading sessions...</div>
+            </div>
+
+            <!-- Server Metrics -->
+            <div id="serverMetrics" style="margin-top: auto; padding: 12px; background: #252525; border-top: 1px solid #3a3a3a;">
+                <div style="font-size: 11px; font-weight: bold; color: #e0e0e0; margin-bottom: 8px; opacity: 0.8; text-align: center;">
+                    <span id="metricServerName">--</span>
+                </div>
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 11px;">
+                    <div style="display: flex; flex-direction: column; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 5px;">
+                        <span style="opacity: 0.7; margin-bottom: 4px;">CPU</span>
+                        <span id="metricCpu" style="font-weight: bold; color: #4CAF50;">--</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 5px;">
+                        <span style="opacity: 0.7; margin-bottom: 4px;">RAM</span>
+                        <span id="metricRam" style="font-weight: bold; color: #2196F3;">--</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 5px; cursor: pointer;" id="diskMetricContainer">
+                        <span style="opacity: 0.7; margin-bottom: 4px; font-size: 10px;">Disk Free</span>
+                        <span id="metricDiskAvail" style="font-weight: bold; color: #FF9800; font-size: 11px;">--</span>
+                        <span id="metricDiskPercent" style="font-size: 10px; opacity: 0.8; margin-top: 2px;">--</span>
+                    </div>
+                    <div style="display: flex; flex-direction: column; align-items: center; padding: 8px; background: #2a2a2a; border-radius: 5px;">
+                        <span style="opacity: 0.7; margin-bottom: 4px;">Uptime</span>
+                        <span id="metricUptime" style="font-weight: bold; color: #9C27B0; font-size: 10px;">--</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="sidebar-resizer"></div>
+        </div>
+
+        <div class="terminal-container">
+            <div id="statusMessage" class="status-message" style="display: none;"></div>
+            <!-- Connection tabs container -->
+            <div id="connectionTabsContainer" style="display: flex; background: #1e1e1e; border-bottom: 2px solid #4a9eff; overflow-x: auto; min-height: 45px; align-items: center; padding: 5px 10px;"></div>
+            <!-- Session tabs container -->
+            <div id="tabsContainer" style="display: flex; background: #2d2d2d; border-bottom: 1px solid #3a3a3a; overflow-x: auto; min-height: 40px;"></div>
+            <!-- Terminals container -->
+            <div id="terminalsContainer" style="flex: 1; position: relative; overflow: hidden;"></div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/xterm@5.3.0/lib/xterm.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-fit@0.8.0/lib/xterm-addon-fit.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xterm-addon-web-links@0.9.0/lib/xterm-addon-web-links.js"></script>
+
+    <script>
+        // State
+        const state = {
+            // Legacy single connection support (for backwards compat during migration)
+            websocket: null,
+            sessions: [],
+            connected: false,
+
+            // Connection management
+            connections: [],              // Array of connection configs
+            currentConnection: null,      // Selected connection index in dropdown (not necessarily active)
+            editingConnectionIndex: null,
+
+            // New multi-connection state
+            connectionTabs: {},           // Map: connIndex -> { websocket, sessions, tabs, activeTab, connected, tabElement }
+            activeConnectionTab: null,     // Currently visible connection tab index
+
+            // Legacy tab management (to be replaced)
+            tabs: {},                     // Map of sessionId -> { terminal, fitAddon, element, tabElement, sessionId, title, connectionIndex }
+            activeTab: null
+        };
+
+        // Connection management functions
+        async function loadConnections() {
+            try {
+                // Load from server API (use current host)
+                const apiUrl = `http://${window.location.hostname}:8887/api/connections`;
+                const response = await fetch(apiUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data && data.length > 0) {
+                        state.connections = data;
+                    } else {
+                        // Default connection - current host
+                        state.connections = [{
+                            name: 'Local',
+                            host: window.location.hostname,
+                            port: 8766
+                        }];
+                        await saveConnections();
+                    }
+                } else {
+                    console.error('Failed to load connections from server:', response.status);
+                    // Fallback to default
+                    state.connections = [{
+                        name: 'Local',
+                        host: window.location.hostname,
+                        port: 8766
+                    }];
+                }
+            } catch (error) {
+                console.error('Error loading connections:', error);
+                // Fallback to default
+                state.connections = [{
+                    name: 'Local',
+                    host: window.location.hostname,
+                    port: 8766
+                }];
+            }
+
+            // Auto-select first connection if none selected
+            if (state.currentConnection === null && state.connections.length > 0) {
+                state.currentConnection = 0;
+            }
+
+            renderConnectionSelect();
+        }
+
+        async function saveConnections() {
+            try {
+                // Save to server API (use current host)
+                const apiUrl = `http://${window.location.hostname}:8887/api/connections`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(state.connections)
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to save connections to server:', response.status);
+                    showStatus('Failed to save connections', 'error');
+                }
+            } catch (error) {
+                console.error('Error saving connections:', error);
+                showStatus('Error saving connections', 'error');
+            }
+        }
+
+        // Load preferences from server
+        async function loadPreferences() {
+            try {
+                const apiUrl = `http://${window.location.hostname}:8887/api/preferences`;
+                const response = await fetch(apiUrl);
+                if (response.ok) {
+                    const data = await response.json();
+                    return data.personalPreferences || '';
+                }
+            } catch (error) {
+                console.error('Error loading preferences:', error);
+            }
+            return '';
+        }
+
+        // Save preferences to server
+        async function savePreferences(preferences) {
+            try {
+                const apiUrl = `http://${window.location.hostname}:8887/api/preferences`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ personalPreferences: preferences })
+                });
+
+                if (!response.ok) {
+                    console.error('Failed to save preferences to server:', response.status);
+                    showStatus('Failed to save preferences', 'error');
+                    return false;
+                }
+                return true;
+            } catch (error) {
+                console.error('Error saving preferences:', error);
+                showStatus('Error saving preferences', 'error');
+                return false;
+            }
+        }
+
+        function renderConnectionSelect() {
+            const select = document.getElementById('connectionSelect');
+            select.innerHTML = '<option value="">Select Connection...</option>';
+
+            state.connections.forEach((conn, index) => {
+                const option = document.createElement('option');
+                option.value = index;
+                option.textContent = `${conn.name} (${conn.host}:${conn.port})`;
+                if (state.currentConnection === index) {
+                    option.selected = true;
+                }
+                select.appendChild(option);
+            });
+        }
+
+        function showConnectionModal(editIndex = null) {
+            const modal = document.getElementById('connectionModal');
+            const form = document.getElementById('connectionForm');
+            const title = document.getElementById('modalTitle');
+
+            state.editingConnectionIndex = editIndex;
+
+            if (editIndex !== null) {
+                title.textContent = 'Edit Connection';
+                const conn = state.connections[editIndex];
+                document.getElementById('connName').value = conn.name;
+                document.getElementById('connHost').value = conn.host;
+                document.getElementById('connPort').value = conn.port;
+            } else {
+                title.textContent = 'Add Connection';
+                form.reset();
+                document.getElementById('connPort').value = '8766';
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        function hideConnectionModal() {
+            document.getElementById('connectionModal').style.display = 'none';
+            document.getElementById('connectionForm').reset();
+            state.editingConnectionIndex = null;
+        }
+
+        async function saveConnection(event) {
+            event.preventDefault();
+
+            const conn = {
+                name: document.getElementById('connName').value,
+                host: document.getElementById('connHost').value,
+                port: parseInt(document.getElementById('connPort').value)
+            };
+
+            if (state.editingConnectionIndex !== null) {
+                state.connections[state.editingConnectionIndex] = conn;
+            } else {
+                state.connections.push(conn);
+            }
+
+            await saveConnections();
+            renderConnectionSelect();
+            hideConnectionModal();
+        }
+
+        async function deleteConnection() {
+            const select = document.getElementById('connectionSelect');
+            const index = parseInt(select.value);
+
+            if (isNaN(index)) {
+                alert('Please select a connection to delete');
+                return;
+            }
+
+            if (confirm(`Delete connection "${state.connections[index].name}"?`)) {
+                if (state.currentConnection === index) {
+                    if (state.websocket) {
+                        state.websocket.close();
+                    }
+                    state.currentConnection = null;
+                }
+                state.connections.splice(index, 1);
+                await saveConnections();
+                renderConnectionSelect();
+            }
+        }
+
+        function switchConnection() {
+            const select = document.getElementById('connectionSelect');
+            const index = parseInt(select.value);
+
+            if (isNaN(index)) {
+                return;
+            }
+
+            state.currentConnection = index;
+            // Note: No longer auto-connects, user must click Connect button
+        }
+
+        // Connection Tab Management Functions
+        function getActiveConnection() {
+            if (state.activeConnectionTab === null) return null;
+            return state.connectionTabs[state.activeConnectionTab];
+        }
+
+        // Track which connection the settings popover is for
+        let currentSettingsConnectionIndex = null;
+
+        function showSelectedConnectionSettings() {
+            // Use active connection tab if available, otherwise use dropdown selection
+            let connIndex = state.activeConnectionTab;
+            console.log('showSelectedConnectionSettings - activeConnectionTab:', state.activeConnectionTab);
+            console.log('showSelectedConnectionSettings - currentConnection:', state.currentConnection);
+
+            if (connIndex === null) {
+                connIndex = state.currentConnection;
+            }
+
+            console.log('showSelectedConnectionSettings - using connIndex:', connIndex);
+
+            if (connIndex === null) {
+                showStatus('Please select a connection first', 'error');
+                return;
+            }
+
+            const conn = state.connections[connIndex];
+            if (!conn) {
+                console.error('No connection found at index:', connIndex);
+                return;
+            }
+
+            currentSettingsConnectionIndex = connIndex;
+            console.log('showSelectedConnectionSettings - set currentSettingsConnectionIndex to:', connIndex);
+
+            const popover = document.getElementById('connectionSettingsPopover');
+            const title = document.getElementById('connectionSettingsTitle');
+            const settingsBtn = document.getElementById('connectionSettingsBtn');
+
+            title.textContent = `${conn.name} Settings`;
+
+            // Position popover below the settings button in sidebar
+            const rect = settingsBtn.getBoundingClientRect();
+            popover.style.top = `${rect.bottom + 5}px`;
+            popover.style.left = `${rect.left}px`;
+            popover.classList.add('show');
+
+            // Close popover when clicking outside
+            setTimeout(() => {
+                document.addEventListener('click', closeConnectionSettingsOnClickOutside);
+            }, 0);
+        }
+
+        function hideConnectionSettings() {
+            const popover = document.getElementById('connectionSettingsPopover');
+            popover.classList.remove('show');
+            document.removeEventListener('click', closeConnectionSettingsOnClickOutside);
+            currentSettingsConnectionIndex = null;
+        }
+
+        function closeConnectionSettingsOnClickOutside(e) {
+            const popover = document.getElementById('connectionSettingsPopover');
+            const sidebarSettingsBtn = document.getElementById('connectionSettingsBtn');
+            if (!popover.contains(e.target) &&
+                !e.target.closest('.connection-tab-close') &&
+                e.target !== sidebarSettingsBtn &&
+                !sidebarSettingsBtn.contains(e.target)) {
+                hideConnectionSettings();
+            }
+        }
+
+        function handleRestartBridge() {
+            if (currentSettingsConnectionIndex !== null) {
+                hideConnectionSettings();
+                restartBridgeServer(currentSettingsConnectionIndex);
+            }
+        }
+
+        function handleUpdateBridge() {
+            console.log('handleUpdateBridge - currentSettingsConnectionIndex:', currentSettingsConnectionIndex);
+
+            // If currentSettingsConnectionIndex is null, use active connection tab as fallback
+            let connIndex = currentSettingsConnectionIndex;
+            if (connIndex === null) {
+                connIndex = state.activeConnectionTab;
+                console.log('handleUpdateBridge - using activeConnectionTab as fallback:', connIndex);
+            }
+
+            if (connIndex === null) {
+                console.error('handleUpdateBridge - no connection available!');
+                showStatus('No connection selected', 'error');
+                return;
+            }
+
+            hideConnectionSettings();
+            updateBridgeServer(connIndex);
+        }
+
+        function handleDeleteConnection() {
+            if (currentSettingsConnectionIndex !== null) {
+                hideConnectionSettings();
+                closeConnectionTab(currentSettingsConnectionIndex);
+            }
+        }
+
+        function createConnectionTab(connIndex) {
+            const conn = state.connections[connIndex];
+            if (!conn) return null;
+
+            const container = document.getElementById('connectionTabsContainer');
+
+            const tab = document.createElement('div');
+            tab.className = 'connection-tab';
+            tab.dataset.connIndex = connIndex;
+
+            const status = document.createElement('span');
+            status.className = 'connection-tab-status disconnected';
+
+            const name = document.createElement('span');
+            name.textContent = conn.name;
+
+            const version = document.createElement('span');
+            version.className = 'connection-tab-version';
+            version.style.marginLeft = '5px';
+            version.style.fontSize = '0.8em';
+            version.style.opacity = '0.7';
+            version.textContent = '';  // Will be populated when version is received
+
+            // Close button
+            const closeBtn = document.createElement('span');
+            closeBtn.className = 'connection-tab-close';
+            closeBtn.textContent = '×';
+            closeBtn.onclick = (e) => {
+                e.stopPropagation();
+                closeConnectionTab(connIndex);
+            };
+
+            tab.appendChild(status);
+            tab.appendChild(name);
+            tab.appendChild(version);
+            tab.appendChild(closeBtn);
+
+            tab.onclick = () => switchToConnectionTab(connIndex);
+
+            container.appendChild(tab);
+
+            return tab;
+        }
+
+        function openConnectionTab(connIndex) {
+            // Check if already open
+            if (state.connectionTabs[connIndex]) {
+                switchToConnectionTab(connIndex);
+                return;
+            }
+
+            // Create connection tab state
+            state.connectionTabs[connIndex] = {
+                websocket: null,
+                sessions: [],
+                tabs: {},
+                activeTab: null,
+                connected: false,
+                tabElement: null,
+                version: null
+            };
+
+            // Create UI tab
+            const tabElement = createConnectionTab(connIndex);
+            state.connectionTabs[connIndex].tabElement = tabElement;
+
+            // Connect WebSocket
+            connectWebSocketForConnection(connIndex);
+
+            // Switch to this tab
+            switchToConnectionTab(connIndex);
+        }
+
+        function switchToConnectionTab(connIndex) {
+            // Hide all connection tabs' content
+            Object.entries(state.connectionTabs).forEach(([idx, connTab]) => {
+                if (connTab.tabElement) {
+                    connTab.tabElement.classList.remove('active');
+                }
+                // Hide all session tabs and terminals for ALL connections
+                Object.values(connTab.tabs).forEach(tab => {
+                    if (tab.tabElement) {
+                        tab.tabElement.style.display = 'none';
+                        tab.tabElement.classList.remove('active');
+                    }
+                    if (tab.element) {
+                        tab.element.style.display = 'none';
+                        tab.element.classList.remove('active');
+                    }
+                });
+            });
+
+            // Show active connection tab
+            const activeConn = state.connectionTabs[connIndex];
+            if (!activeConn) return;
+
+            activeConn.tabElement.classList.add('active');
+            state.activeConnectionTab = connIndex;
+
+            // Show ALL session tabs for this connection (but not active yet)
+            Object.values(activeConn.tabs).forEach(tab => {
+                if (tab.tabElement) {
+                    tab.tabElement.style.display = 'flex';
+                }
+            });
+
+            // Show and activate the active session terminal (if any)
+            if (activeConn.activeTab && activeConn.tabs[activeConn.activeTab]) {
+                const activeSessionTab = activeConn.tabs[activeConn.activeTab];
+                if (activeSessionTab.element) {
+                    activeSessionTab.element.style.display = 'block';
+                    activeSessionTab.element.classList.add('active');
+                }
+                if (activeSessionTab.tabElement) {
+                    activeSessionTab.tabElement.classList.add('active');
+                }
+            }
+
+            // Update sidebar to show this connection's sessions
+            renderSessions(activeConn.sessions);
+
+            // Update sidebar header and connection name indicator
+            const conn = state.connections[connIndex];
+            if (conn) {
+                document.getElementById('sidebarHeader').textContent = conn.name;
+                document.getElementById('activeConnectionName').textContent = conn.name;
+                document.getElementById('connectionNameIndicator').style.display = 'block';
+                document.title = `${conn.name} - Claude CLI Terminal`;
+            }
+        }
+
+        function closeConnectionTab(connIndex) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) return;
+
+            // Close all session tabs
+            Object.keys(connTab.tabs).forEach(sessionId => {
+                closeTabForConnection(connIndex, sessionId);
+            });
+
+            // Close WebSocket
+            if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                connTab.websocket.close();
+            }
+
+            // Remove tab element
+            if (connTab.tabElement) {
+                connTab.tabElement.remove();
+            }
+
+            // Remove from state
+            delete state.connectionTabs[connIndex];
+
+            // If this was the active tab, switch to another
+            if (state.activeConnectionTab === connIndex) {
+                state.activeConnectionTab = null;
+                const otherConn = Object.keys(state.connectionTabs)[0];
+                if (otherConn) {
+                    switchToConnectionTab(parseInt(otherConn));
+                } else {
+                    // No more connections, clear UI
+                    document.getElementById('sidebarHeader').textContent = 'Sessions';
+                    document.getElementById('connectionNameIndicator').style.display = 'none';
+                    document.getElementById('sessionsList').innerHTML = '<div class="loading">No active connections</div>';
+                    document.title = 'Claude CLI Terminal';
+                }
+            }
+        }
+
+        function restartBridgeServer(connIndex) {
+            const connTab = state.connectionTabs[connIndex];
+            const conn = state.connections[connIndex];
+
+            if (!connTab || !conn) return;
+
+            // Confirm with user
+            if (!confirm(`Are you sure you want to restart the bridge server for "${conn.name}"?\n\nThis will disconnect all active sessions on this connection.`)) {
+                return;
+            }
+
+            console.log(`Requesting restart for connection ${connIndex} (${conn.name})`);
+
+            // Send restart message
+            if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                connTab.websocket.send(JSON.stringify({
+                    type: 'restart_server'
+                }));
+
+                showStatus(`Restarting bridge server for ${conn.name}...`, 'success');
+            } else {
+                showStatus('Not connected to server', 'error');
+            }
+        }
+
+        function updateBridgeServer(connIndex) {
+            const connTab = state.connectionTabs[connIndex];
+            const conn = state.connections[connIndex];
+
+            console.log(`updateBridgeServer called for connection ${connIndex}`, {
+                connTab: connTab,
+                conn: conn,
+                version: connTab?.version
+            });
+
+            if (!connTab || !conn) {
+                console.error('No connection tab or connection found');
+                return;
+            }
+
+            // Check if server has version (means it's updated with new code)
+            console.log(`Checking version for ${conn.name}: ${connTab.version}`);
+            if (!connTab.version) {
+                console.log('Old server detected - showing manual instructions');
+                // Old server without update support - show manual instructions
+                const defaultDeploymentServer = `http://${window.location.hostname}:8889`;
+                const deploymentServer = prompt(
+                    `This server needs to be updated manually first.\n\n` +
+                    `Enter deployment server URL (default is current host):`,
+                    defaultDeploymentServer
+                );
+
+                if (!deploymentServer) {
+                    console.log('User cancelled deployment server prompt');
+                    showStatus('Update cancelled', 'info');
+                    return;
+                }
+
+                const sshCommand = `curl -fsSL ${deploymentServer}/install | SOURCE_SERVER=${deploymentServer} bash`;
+
+                // Copy to clipboard if available
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(sshCommand).then(() => {
+                        alert(`Manual update required!\n\nSSH to ${conn.name} and run:\n\n${sshCommand}\n\n✓ Command copied to clipboard!`);
+                    }).catch(() => {
+                        alert(`Manual update required!\n\nSSH to ${conn.name} and run:\n\n${sshCommand}`);
+                    });
+                } else {
+                    alert(`Manual update required!\n\nSSH to ${conn.name} and run:\n\n${sshCommand}`);
+                }
+                return;
+            }
+
+            // Server has version - supports automatic updates
+            console.log('New server detected - using automatic update');
+            console.log(`Current server version: ${connTab.version}`);
+
+            // Check if already on latest version by fetching from deployment server
+            const defaultDeploymentServer = `http://${window.location.hostname}:8889`;
+
+            // Prompt user for deployment server URL first
+            const deploymentServer = prompt(
+                `Enter deployment server URL:\n\n` +
+                `The remote server will download updates from this URL.\n` +
+                `Make sure this URL is accessible from ${conn.name}.\n\n` +
+                `Common options:\n` +
+                `- ${window.location.hostname}:8889 (current host)\n` +
+                `- 100.94.187.56:8889 (Tailscale)`,
+                defaultDeploymentServer
+            );
+
+            if (!deploymentServer) {
+                console.log('User cancelled deployment server prompt');
+                showStatus('Update cancelled', 'info');
+                return;
+            }
+
+            // Confirm with user
+            if (!confirm(`Update bridge server for "${conn.name}"?\n\nCurrent version: ${connTab.version}\nDeployment server: ${deploymentServer}\n\nThis will:\n1. Try git pull (if in a git repo)\n2. Or run full installation from deployment server\n3. Install any new dependencies\n4. Restart the bridge server\n5. Disconnect all active sessions\n\nNote: Check the deployment page to see available version before updating.\n\nContinue?`)) {
+                console.log('User cancelled update confirmation');
+                return;
+            }
+
+            console.log(`Requesting update for connection ${connIndex} (${conn.name}) from ${deploymentServer}`);
+
+            // Send update message
+            if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                connTab.websocket.send(JSON.stringify({
+                    type: 'update_server',
+                    update_source: deploymentServer
+                }));
+
+                showStatus(`Updating bridge server for ${conn.name}...`, 'success');
+            } else {
+                console.error('WebSocket not connected');
+                showStatus('Not connected to server', 'error');
+            }
+        }
+
+        function closeTabForConnection(connIndex, sessionId) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab || !connTab.tabs[sessionId]) return;
+
+            const tab = connTab.tabs[sessionId];
+
+            // Send close message
+            if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                connTab.websocket.send(JSON.stringify({
+                    type: 'close_session',
+                    session_id: sessionId
+                }));
+            }
+
+            // Clean up terminal
+            if (tab.terminal) {
+                tab.terminal.dispose();
+            }
+
+            // Remove DOM elements
+            if (tab.element) {
+                tab.element.remove();
+            }
+            if (tab.tabElement) {
+                tab.tabElement.remove();
+            }
+
+            // Remove from state
+            delete connTab.tabs[sessionId];
+
+            // If this was the active tab, switch to another
+            if (connTab.activeTab === sessionId) {
+                connTab.activeTab = null;
+                const otherTab = Object.keys(connTab.tabs)[0];
+                if (otherTab) {
+                    switchTabForConnection(connIndex, otherTab);
+                }
+            }
+        }
+
+        function switchTabForConnection(connIndex, sessionId) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) return;
+
+            // First, hide ALL tabs from ALL connections to ensure clean state
+            Object.values(state.connectionTabs).forEach(ct => {
+                Object.values(ct.tabs).forEach(tab => {
+                    if (tab.element) {
+                        tab.element.classList.remove('active');
+                        tab.element.style.display = 'none';
+                    }
+                    if (tab.tabElement) {
+                        tab.tabElement.classList.remove('active');
+                        tab.tabElement.style.display = 'none';
+                    }
+                });
+            });
+
+            // Show all tabs for the active connection (visible but not active)
+            Object.values(connTab.tabs).forEach(tab => {
+                if (tab.tabElement) {
+                    tab.tabElement.style.display = 'flex';
+                    tab.tabElement.classList.remove('active');
+                }
+            });
+
+            // Show and activate the selected tab
+            const tab = connTab.tabs[sessionId];
+            if (tab) {
+                if (tab.element) {
+                    tab.element.style.display = 'block';
+                    tab.element.classList.add('active');
+                }
+                if (tab.tabElement) {
+                    tab.tabElement.style.display = 'flex';
+                    tab.tabElement.classList.add('active');
+                }
+                connTab.activeTab = sessionId;
+
+                // Fit terminal
+                if (tab.fitAddon) {
+                    setTimeout(() => tab.fitAddon.fit(), 0);
+                }
+            }
+        }
+
+        // Initialize terminal
+        // Restore a tab from server data
+        function restoreTab(tabData) {
+            const sessionId = tabData.sessionId;
+            const title = tabData.title;
+            const projectDir = tabData.projectDir;
+            const type = tabData.type;
+
+            console.log(`Restoring tab: ${sessionId} - ${title}`);
+
+            // Check if tab already exists
+            if (state.tabs[sessionId]) {
+                console.log(`Tab ${sessionId} already exists, skipping`);
+                return;
+            }
+
+            // Create the tab
+            const tabInfo = createTab(sessionId, title);
+
+            // Reconnect to existing session on server
+            if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                // The session is already running on the server, just reconnect
+                tabInfo.terminal.writeln(`\x1b[36mReconnecting to ${type} session...\x1b[0m`);
+                if (projectDir) {
+                    tabInfo.terminal.writeln(`Working directory: ${projectDir}`);
+                }
+
+                // Send reconnect message
+                sendMessage({
+                    type: 'reconnect_session',
+                    session_id: sessionId
+                });
+            }
+        }
+
+        // Tab persistence functions
+        function saveTabsToStorage() {
+            const tabsData = Object.keys(state.tabs).map(sessionId => ({
+                sessionId: sessionId,
+                title: state.tabs[sessionId].title,
+                isActive: state.activeTab === sessionId
+            }));
+            localStorage.setItem('claudeOpenTabs', JSON.stringify(tabsData));
+        }
+
+        function loadTabsFromStorage() {
+            const saved = localStorage.getItem('claudeOpenTabs');
+            if (!saved) return [];
+            try {
+                return JSON.parse(saved);
+            } catch (e) {
+                console.error('Error loading tabs from storage:', e);
+                return [];
+            }
+        }
+
+        function clearTabsFromStorage() {
+            localStorage.removeItem('claudeOpenTabs');
+        }
+
+        // Tab management functions
+        function createTab(sessionId, title, connIndex = null) {
+            // If connIndex provided, use new connection-based system
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                return createTabForConnection(connIndex, sessionId, title);
+            }
+
+            // LEGACY: Old single-connection tab creation
+            // Create terminal wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'terminal-wrapper';
+            wrapper.id = `terminal-${sessionId}`;
+            document.getElementById('terminalsContainer').appendChild(wrapper);
+
+            // Create terminal instance
+            const terminal = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+                theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                    selection: '#4a9eff',
+                },
+                scrollback: 10000,
+                convertEol: true
+            });
+
+            const fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            terminal.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+            terminal.open(wrapper);
+            fitAddon.fit();
+
+            // Handle terminal input
+            terminal.onData(data => {
+                if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                    state.websocket.send(JSON.stringify({
+                        type: 'terminal_input',
+                        session_id: sessionId,
+                        input: data
+                    }));
+                }
+            });
+
+            // Auto-scroll to bottom only if user is already at bottom
+            terminal.onWriteParsed(() => {
+                const buffer = terminal.buffer.active;
+                const isAtBottom = buffer.viewportY + terminal.rows >= buffer.baseY + buffer.cursorY;
+                if (isAtBottom) {
+                    terminal.scrollToBottom();
+                }
+            });
+
+            // Create tab element
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.innerHTML = `
+                <span class="tab-title">${title}</span>
+                <span class="tab-close" data-session="${sessionId}">×</span>
+            `;
+
+            tab.querySelector('.tab-title').addEventListener('click', () => switchTab(sessionId));
+            tab.querySelector('.tab-close').addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeTab(sessionId);
+            });
+
+            document.getElementById('tabsContainer').appendChild(tab);
+
+            // Store in state
+            state.tabs[sessionId] = {
+                terminal,
+                fitAddon,
+                element: wrapper,
+                tabElement: tab,
+                sessionId,
+                title
+            };
+
+            // Save tabs to storage
+            saveTabsToStorage();
+
+            return state.tabs[sessionId];
+        }
+
+        function createTabForConnection(connIndex, sessionId, title) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) return null;
+
+            // Create terminal wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'terminal-wrapper';
+            wrapper.id = `terminal-${connIndex}-${sessionId}`;
+            wrapper.style.display = 'none'; // Hidden by default
+            document.getElementById('terminalsContainer').appendChild(wrapper);
+
+            // Create terminal instance
+            const terminal = new Terminal({
+                cursorBlink: true,
+                fontSize: 14,
+                fontFamily: 'Menlo, Monaco, "Courier New", monospace',
+                theme: {
+                    background: '#000000',
+                    foreground: '#ffffff',
+                    cursor: '#ffffff',
+                    selection: '#4a9eff',
+                },
+                scrollback: 10000,
+                convertEol: true
+            });
+
+            const fitAddon = new FitAddon.FitAddon();
+            terminal.loadAddon(fitAddon);
+            terminal.loadAddon(new WebLinksAddon.WebLinksAddon());
+
+            terminal.open(wrapper);
+            fitAddon.fit();
+
+            // Handle terminal input - route to correct connection
+            terminal.onData(data => {
+                if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                    connTab.websocket.send(JSON.stringify({
+                        type: 'terminal_input',
+                        session_id: sessionId,
+                        input: data
+                    }));
+                }
+            });
+
+            // Auto-scroll to bottom only if user is already at bottom
+            terminal.onWriteParsed(() => {
+                const buffer = terminal.buffer.active;
+                const isAtBottom = buffer.viewportY + terminal.rows >= buffer.baseY + buffer.cursorY;
+                if (isAtBottom) {
+                    terminal.scrollToBottom();
+                }
+            });
+
+            // Create tab element
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.style.display = 'none'; // Hidden by default
+            tab.innerHTML = `
+                <span class="tab-title">${title}</span>
+                <span class="tab-close" data-session="${sessionId}" data-conn="${connIndex}">×</span>
+            `;
+
+            tab.querySelector('.tab-title').addEventListener('click', () => switchTabForConnection(connIndex, sessionId));
+            tab.querySelector('.tab-close').addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeTabForConnection(connIndex, sessionId);
+            });
+
+            document.getElementById('tabsContainer').appendChild(tab);
+
+            // Store in connection's tab collection
+            connTab.tabs[sessionId] = {
+                terminal,
+                fitAddon,
+                element: wrapper,
+                tabElement: tab,
+                sessionId,
+                title,
+                connectionIndex: connIndex
+            };
+
+            // If this is the active connection, show the tab
+            if (state.activeConnectionTab === connIndex) {
+                tab.style.display = 'flex';
+            }
+
+            return connTab.tabs[sessionId];
+        }
+
+        function switchTab(sessionId) {
+            // Hide all tabs and terminals
+            Object.values(state.tabs).forEach(tab => {
+                tab.element.classList.remove('active');
+                tab.tabElement.classList.remove('active');
+            });
+
+            // Show selected tab
+            if (state.tabs[sessionId]) {
+                state.tabs[sessionId].element.classList.add('active');
+                state.tabs[sessionId].tabElement.classList.add('active');
+                state.activeTab = sessionId;
+
+                // Refit terminal
+                setTimeout(() => {
+                    state.tabs[sessionId].fitAddon.fit();
+                    state.tabs[sessionId].terminal.scrollToBottom();
+                }, 10);
+
+                // Save tabs to storage
+                saveTabsToStorage();
+            }
+        }
+
+        function closeTab(sessionId) {
+            if (!state.tabs[sessionId]) return;
+
+            const tab = state.tabs[sessionId];
+
+            // Close session on server
+            if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                state.websocket.send(JSON.stringify({
+                    type: 'close_session',
+                    session_id: sessionId
+                }));
+            }
+
+            // Remove from DOM
+            tab.element.remove();
+            tab.tabElement.remove();
+
+            // Remove from state
+            delete state.tabs[sessionId];
+
+            // Switch to another tab if this was active
+            if (state.activeTab === sessionId) {
+                const remainingTabs = Object.keys(state.tabs);
+                if (remainingTabs.length > 0) {
+                    switchTab(remainingTabs[0]);
+                } else {
+                    state.activeTab = null;
+                }
+            }
+        }
+
+        function getActiveTerminal() {
+            if (state.activeTab && state.tabs[state.activeTab]) {
+                return state.tabs[state.activeTab].terminal;
+            }
+            return null;
+        }
+
+        function initTerminal() {
+            // Resize all terminals on window resize with debounce
+            let resizeTimeout;
+            window.addEventListener('resize', () => {
+                clearTimeout(resizeTimeout);
+                resizeTimeout = setTimeout(() => {
+                    Object.values(state.tabs).forEach(tab => {
+                        tab.fitAddon.fit();
+                        tab.terminal.scrollToBottom();
+                    });
+                }, 100);
+            });
+        }
+
+        // Connect to WebSocket
+        function connectWebSocketForConnection(connIndex) {
+            const conn = state.connections[connIndex];
+            if (!conn) {
+                console.error('No connection found at index:', connIndex);
+                return;
+            }
+
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) {
+                console.error('No connection tab state for index:', connIndex);
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${conn.host}:${conn.port}`;
+
+            console.log(`Connecting to ${conn.name} (${wsUrl})`);
+
+            // Update status indicator
+            const statusEl = connTab.tabElement.querySelector('.connection-tab-status');
+            if (statusEl) {
+                statusEl.className = 'connection-tab-status disconnected';
+            }
+
+            const ws = new WebSocket(wsUrl);
+
+            ws.onopen = async () => {
+                console.log(`WebSocket connected to ${conn.name}`);
+                connTab.connected = true;
+                connTab.websocket = ws;
+
+                // Update status indicator
+                if (statusEl) {
+                    statusEl.className = 'connection-tab-status connected';
+                }
+
+                // Request version
+                ws.send(JSON.stringify({ type: 'get_version' }));
+
+                // Request sessions list
+                ws.send(JSON.stringify({ type: 'discover_sessions' }));
+
+                // Load and sync preferences from server and push to all existing sessions
+                const preferences = await loadPreferences();
+                if (preferences) {
+                    ws.send(JSON.stringify({
+                        type: 'sync_preferences',
+                        preferences: preferences,
+                        syncToExisting: true
+                    }));
+                    console.log(`Preferences synced to ${conn.name} (including existing sessions)`);
+                }
+
+                // Start metrics refresh if this is the active connection
+                if (state.activeConnectionTab === connIndex) {
+                    startMetricsRefresh();
+                }
+            };
+
+            ws.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessageForConnection(connIndex, data);
+                } catch (e) {
+                    console.error(`Failed to parse message from ${conn.name}:`, event.data);
+                    console.error('Parse error:', e);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error(`WebSocket error for ${conn.name}:`, error);
+                if (statusEl) {
+                    statusEl.className = 'connection-tab-status disconnected';
+                }
+            };
+
+            ws.onclose = () => {
+                console.log(`WebSocket closed for ${conn.name}`);
+                connTab.connected = false;
+                if (statusEl) {
+                    statusEl.className = 'connection-tab-status disconnected';
+                }
+
+                // Show status if this is the active connection
+                if (state.activeConnectionTab === connIndex) {
+                    showStatus(`Connection to ${conn.name} lost`, 'error');
+                }
+            };
+        }
+
+        function connectWebSocket() {
+            // LEGACY: Old single-connection function - kept for backwards compat
+            // Get connection from state or use default
+            let host, port;
+            if (state.currentConnection !== null && state.connections[state.currentConnection]) {
+                const conn = state.connections[state.currentConnection];
+                host = conn.host;
+                port = conn.port;
+            } else {
+                // Default to current host
+                host = window.location.hostname;
+                port = 8766;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsUrl = `${protocol}//${host}:${port}`;
+
+            console.log('Connecting to:', wsUrl);
+            document.getElementById('connectionStatus').textContent = 'Connecting...';
+
+            state.websocket = new WebSocket(wsUrl);
+
+            state.websocket.onopen = () => {
+                console.log('WebSocket connected');
+                state.connected = true;
+                document.getElementById('connectionStatus').textContent = 'Connected';
+                document.getElementById('connectionStatus').style.color = '#4aff4a';
+
+                // Update browser title with connection name
+                if (state.currentConnection !== null && state.connections[state.currentConnection]) {
+                    const connectionName = state.connections[state.currentConnection].name;
+                    document.title = `${connectionName} - Claude CLI Terminal`;
+                }
+
+                // Request sessions list
+                sendMessage({ type: 'discover_sessions' });
+            };
+
+            state.websocket.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    handleMessage(data);
+                } catch (e) {
+                    console.error('Failed to parse message:', event.data);
+                    console.error('Parse error:', e);
+                }
+            };
+
+            state.websocket.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                document.getElementById('connectionStatus').textContent = 'Error';
+                document.getElementById('connectionStatus').style.color = '#ff4a4a';
+            };
+
+            state.websocket.onclose = () => {
+                console.log('WebSocket closed');
+                state.connected = false;
+                document.getElementById('connectionStatus').textContent = 'Disconnected';
+                document.getElementById('connectionStatus').style.color = '#ff4a4a';
+                showStatus('Connection lost. Refresh to reconnect.', 'error');
+            };
+        }
+
+        // Handle WebSocket messages for specific connection
+        function handleMessageForConnection(connIndex, data) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) return;
+
+            switch (data.type) {
+                case 'connected':
+                    console.log(`Server acknowledged connection for ${state.connections[connIndex].name}`);
+                    break;
+
+                case 'version':
+                    console.log(`Received version for ${state.connections[connIndex].name}: ${data.version}`);
+                    connTab.version = data.version;
+                    // Update the version display in the connection tab
+                    if (connTab.tabElement) {
+                        const versionEl = connTab.tabElement.querySelector('.connection-tab-version');
+                        if (versionEl) {
+                            versionEl.textContent = `v${data.version}`;
+                        }
+                    }
+                    break;
+
+                case 'restore_tabs':
+                    console.log(`Restoring tabs for connection ${connIndex}:`, data.tabs);
+                    // TODO: Restore tabs for this specific connection
+                    break;
+
+                case 'sessions':
+                    connTab.sessions = data.data;
+                    // Only render if this is the active connection
+                    if (state.activeConnectionTab === connIndex) {
+                        renderSessions(connTab.sessions);
+                    }
+                    break;
+
+                case 'terminal_started':
+                    if (connTab.tabs[data.session_id]) {
+                        const tab = connTab.tabs[data.session_id];
+
+                        // Clear any pending timeout warning
+                        if (tab.startTimeout) {
+                            clearTimeout(tab.startTimeout);
+                            tab.startTimeout = null;
+                        }
+
+                        tab.terminal.clear();
+                        tab.terminal.writeln(`\x1b[32m✓ Connected to Claude CLI\x1b[0m`);
+                        tab.terminal.writeln('');
+                        setTimeout(() => {
+                            tab.fitAddon.fit();
+                            tab.terminal.scrollToBottom();
+                        }, 50);
+
+                        // Refresh sessions list to show the new session
+                        if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                            connTab.websocket.send(JSON.stringify({ type: 'discover_sessions' }));
+                        }
+                    }
+                    break;
+
+                case 'session_reconnected':
+                    console.log(`Reconnected to session ${data.session_id}`);
+                    if (connTab.tabs[data.session_id]) {
+                        const tab = connTab.tabs[data.session_id];
+                        tab.terminal.writeln(`\x1b[32m✓ Reconnected successfully\x1b[0m`);
+                        tab.terminal.writeln('');
+                    }
+                    break;
+
+                case 'terminal_output':
+                    if (data.session_id && connTab.tabs[data.session_id]) {
+                        connTab.tabs[data.session_id].terminal.write(data.output);
+                    }
+                    break;
+
+                case 'directory_listing':
+                    renderDirectoryContents(data.session_id, data.files);
+                    break;
+
+                case 'file_download':
+                    // Create download link
+                    const blob = new Blob([atob(data.content)], { type: 'application/octet-stream' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = data.filename;
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+                    if (state.activeConnectionTab === connIndex) {
+                        showStatus(`Downloaded ${data.filename}`, 'success');
+                    }
+                    break;
+
+                case 'file_uploaded':
+                    if (state.activeConnectionTab === connIndex) {
+                        showStatus(`Uploaded ${data.filename}`, 'success');
+                        // Refresh file explorer if open
+                        if (data.session_id && connTab.tabs[data.session_id] && connTab.tabs[data.session_id].isFileExplorer) {
+                            refreshExplorer(data.session_id);
+                        }
+                    }
+                    break;
+
+                case 'restart_acknowledged':
+                    console.log(`Bridge server restart acknowledged for ${state.connections[connIndex].name}`);
+                    if (state.activeConnectionTab === connIndex) {
+                        showStatus(data.message || 'Server restarting...', 'success');
+                    }
+                    // The server will disconnect after this message, and reconnection will happen automatically
+                    break;
+
+                case 'update_started':
+                    console.log(`Bridge server update started for ${state.connections[connIndex].name}`);
+                    if (state.activeConnectionTab === connIndex) {
+                        showStatus(data.message || 'Updating server...', 'success');
+                    }
+                    break;
+
+                case 'update_progress':
+                    console.log(`Bridge server update progress for ${state.connections[connIndex].name}: ${data.message}`);
+                    if (state.activeConnectionTab === connIndex) {
+                        showStatus(data.message || 'Update in progress...', 'success');
+                    }
+                    break;
+
+                case 'metrics':
+                    // Update metrics display (only for active connection)
+                    if (state.activeConnectionTab === connIndex) {
+                        const serverName = state.connections[connIndex].name;
+                        updateMetricsDisplay(data.data, serverName);
+                    }
+                    break;
+
+                case 'error':
+                    console.error(`Error from ${state.connections[connIndex].name}:`, data.message);
+                    if (state.activeConnectionTab === connIndex) {
+                        showStatus(data.message, 'error');
+                    }
+                    // Write error to terminal if there's a session_id
+                    if (data.session_id && connTab.tabs[data.session_id]) {
+                        const tab = connTab.tabs[data.session_id];
+                        if (tab.terminal) {
+                            tab.terminal.writeln(`\x1b[31mError: ${data.message}\x1b[0m`);
+                        }
+                    }
+                    break;
+
+                default:
+                    console.log(`Unhandled message type for connection ${connIndex}:`, data.type);
+            }
+        }
+
+        // Handle WebSocket messages (LEGACY - for backwards compat)
+        function handleMessage(data) {
+            switch (data.type) {
+                case 'connected':
+                    console.log('Server acknowledged connection');
+                    break;
+
+                case 'restore_tabs':
+                    console.log('Restoring tabs:', data.tabs);
+                    // Restore tabs from server
+                    data.tabs.forEach(tabData => {
+                        restoreTab(tabData);
+                    });
+                    break;
+
+                case 'sessions':
+                    state.sessions = data.data;
+                    renderSessions();
+                    // Re-fit active terminal after sessions render (sidebar might change)
+                    setTimeout(() => {
+                        if (state.activeTab && state.tabs[state.activeTab]) {
+                            state.tabs[state.activeTab].fitAddon.fit();
+                        }
+                    }, 50);
+                    break;
+
+                case 'terminal_started':
+                    showStatus(`Terminal started for session ${data.session_id}`, 'success');
+                    if (state.tabs[data.session_id]) {
+                        const tab = state.tabs[data.session_id];
+                        tab.terminal.clear();
+                        tab.terminal.writeln(`\x1b[32m✓ Connected to Claude CLI\x1b[0m`);
+                        tab.terminal.writeln('');
+                        // Re-fit terminal after clearing
+                        setTimeout(() => {
+                            tab.fitAddon.fit();
+                            tab.terminal.scrollToBottom();
+                        }, 50);
+                    }
+                    break;
+
+                case 'session_reconnected':
+                    console.log(`Reconnected to session ${data.session_id}`);
+                    if (state.tabs[data.session_id]) {
+                        const tab = state.tabs[data.session_id];
+                        tab.terminal.writeln(`\x1b[32m✓ Reconnected successfully\x1b[0m`);
+                        tab.terminal.writeln('');
+                    }
+                    break;
+
+                case 'terminal_output':
+                    // Write output to the correct terminal tab
+                    if (data.session_id && state.tabs[data.session_id]) {
+                        state.tabs[data.session_id].terminal.write(data.output);
+                    }
+                    break;
+
+                case 'file_uploaded':
+                    if (state.activeTab && state.tabs[state.activeTab]) {
+                        state.tabs[state.activeTab].terminal.writeln(`\x1b[32m✓ File uploaded: ${data.filename}\x1b[0m`);
+                    }
+                    showStatus(`File uploaded: ${data.filename}`, 'success');
+                    break;
+
+                case 'directory_listing':
+                    renderDirectoryContents(data.session_id, data.files);
+                    break;
+
+                case 'file_download':
+                    // Create download link
+                    const blob = new Blob([Uint8Array.from(atob(data.content), c => c.charCodeAt(0))]);
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = data.filename;
+                    a.click();
+                    URL.revokeObjectURL(url);
+                    showStatus(`Downloaded: ${data.filename}`, 'success');
+                    break;
+
+                case 'file_upload_complete':
+                    showStatus(`Uploaded: ${data.filename}`, 'success');
+                    // Refresh the current directory
+                    if (state.tabs[data.session_id] && state.tabs[data.session_id].type === 'explorer') {
+                        refreshExplorer(data.session_id);
+                    }
+                    break;
+
+                case 'error':
+                    showStatus(`Error: ${data.message}`, 'error');
+                    if (state.activeTab && state.tabs[state.activeTab]) {
+                        const tab = state.tabs[state.activeTab];
+                        if (tab.terminal) {
+                            tab.terminal.writeln(`\x1b[31mError: ${data.message}\x1b[0m`);
+                        }
+                    }
+                    break;
+            }
+        }
+
+        // Send message to server
+        function sendMessage(data) {
+            if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                state.websocket.send(JSON.stringify(data));
+            }
+        }
+
+        // Refresh sessions from the bridge
+        function refreshSessions() {
+            // Check if we have an active connection
+            const activeConn = getActiveConnection();
+
+            if (activeConn && activeConn.websocket && activeConn.websocket.readyState === WebSocket.OPEN) {
+                console.log('Requesting session refresh...');
+                const container = document.getElementById('sessionsList');
+                container.innerHTML = '<div class="loading">Refreshing sessions...</div>';
+                activeConn.websocket.send(JSON.stringify({ type: 'discover_sessions' }));
+            } else if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                // Legacy single connection
+                console.log('Requesting session refresh...');
+                const container = document.getElementById('sessionsList');
+                container.innerHTML = '<div class="loading">Refreshing sessions...</div>';
+                sendMessage({ type: 'discover_sessions' });
+            } else {
+                showStatus('Not connected to server', 'error');
+            }
+        }
+
+        // Render sessions list
+        function renderSessions(sessionsData = null) {
+            const container = document.getElementById('sessionsList');
+            container.innerHTML = '';
+
+            // Use provided sessions data or fall back to state.sessions
+            const sessions = sessionsData || state.sessions;
+            const projects = sessions.projects || {};
+
+            if (Object.keys(projects).length === 0) {
+                container.innerHTML = '<div class="loading">No sessions found</div>';
+                return;
+            }
+
+            // Flatten all sessions across all projects and directories
+            const allSessions = [];
+            for (const [projectName, projectData] of Object.entries(projects)) {
+                const directories = projectData.directories || {};
+                for (const [dirPath, sessions] of Object.entries(directories)) {
+                    sessions.forEach(session => {
+                        allSessions.push({
+                            ...session,
+                            projectName,
+                            dirPath
+                        });
+                    });
+                }
+            }
+
+            // Sort all sessions by last_modified (most recent first)
+            allSessions.sort((a, b) => new Date(b.last_modified) - new Date(a.last_modified));
+
+            // Show "Recent" section with top 5 sessions
+            const recentSection = document.createElement('div');
+            recentSection.className = 'project-section';
+
+            const recentHeader = document.createElement('div');
+            recentHeader.className = 'project-header';
+            recentHeader.textContent = '⏱️ Recent (5)';
+            recentSection.appendChild(recentHeader);
+
+            const recentContent = document.createElement('div');
+            recentContent.className = 'directory-content';
+            recentContent.style.marginLeft = '10px';
+
+            allSessions.slice(0, 5).forEach(session => {
+                const item = createSessionItem(session);
+                recentContent.appendChild(item);
+            });
+
+            recentSection.appendChild(recentContent);
+            container.appendChild(recentSection);
+
+            // Show organized folders (collapsed by default)
+            for (const [projectName, projectData] of Object.entries(projects)) {
+                const projectSection = document.createElement('div');
+                projectSection.className = 'project-section';
+
+                const projectHeader = document.createElement('div');
+                projectHeader.className = 'project-header';
+                projectHeader.textContent = `📁 ${projectName}`;
+                projectSection.appendChild(projectHeader);
+
+                const projectContent = document.createElement('div');
+                projectContent.className = 'directory-content';
+                projectContent.style.display = 'none'; // Collapsed by default
+                projectContent.style.marginLeft = '10px';
+
+                projectHeader.addEventListener('click', () => {
+                    projectContent.style.display = projectContent.style.display === 'none' ? 'block' : 'none';
+                });
+
+                const directories = projectData.directories || {};
+                for (const [dirPath, sessions] of Object.entries(directories)) {
+                    const dirSection = document.createElement('div');
+                    dirSection.className = 'directory-section';
+
+                    const dirHeader = document.createElement('div');
+                    dirHeader.className = 'directory-header';
+                    dirHeader.textContent = `📂 ${dirPath.split('/').pop() || dirPath}`;
+                    dirSection.appendChild(dirHeader);
+
+                    const dirContent = document.createElement('div');
+                    dirContent.className = 'directory-content';
+                    dirContent.style.display = 'none'; // Collapsed by default
+
+                    dirHeader.addEventListener('click', (e) => {
+                        e.stopPropagation();
+                        dirContent.style.display = dirContent.style.display === 'none' ? 'block' : 'none';
+                    });
+
+                    sessions.forEach(session => {
+                        const item = createSessionItem(session);
+                        dirContent.appendChild(item);
+                    });
+
+                    dirSection.appendChild(dirContent);
+                    projectContent.appendChild(dirSection);
+                }
+
+                projectSection.appendChild(projectContent);
+                container.appendChild(projectSection);
+            }
+        }
+
+        // Helper to create session item
+        function createSessionItem(session) {
+            const item = document.createElement('div');
+            item.className = 'session-item';
+
+            // Check if session has an open tab in the active connection
+            const activeConn = getActiveConnection();
+            if (activeConn && activeConn.tabs[session.session_id]) {
+                item.classList.add('active');
+            } else if (state.tabs[session.session_id]) {
+                // Legacy single connection
+                item.classList.add('active');
+            }
+
+            const preview = document.createElement('div');
+            preview.className = 'session-preview';
+
+            // Try to get preview from: session.preview, tab title, or default
+            let previewText = session.preview || 'No preview';
+
+            // If no preview, check if we have a tab with a title
+            if (!session.preview || session.preview === 'No preview') {
+                const activeConn = getActiveConnection();
+                if (activeConn && activeConn.tabs[session.session_id]) {
+                    previewText = activeConn.tabs[session.session_id].title || previewText;
+                } else if (state.tabs[session.session_id]) {
+                    previewText = state.tabs[session.session_id].title || previewText;
+                }
+            }
+
+            preview.textContent = previewText;
+
+            const meta = document.createElement('div');
+            meta.className = 'session-meta';
+
+            // Format timestamp
+            const date = new Date(session.last_modified);
+            const timeAgo = formatTimeAgo(date);
+
+            meta.innerHTML = `
+                <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
+                    <span>${session.message_count || 0} msgs</span>
+                    <span style="color: #888;">${timeAgo}</span>
+                </div>
+                <div style="font-size: 10px; color: #666; font-family: monospace; overflow: hidden; text-overflow: ellipsis;">
+                    ${session.session_id}
+                </div>
+            `;
+
+            item.appendChild(preview);
+            item.appendChild(meta);
+
+            item.addEventListener('click', () => {
+                // Use cwd (from dirPath or cwd field) - the directory where conversation happened
+                // dirPath is set when flattening sessions and contains the cwd
+                const workDir = session.dirPath || session.cwd;
+                // If it's 'unknown', use null
+                const finalDir = (workDir && workDir !== 'unknown') ? workDir : null;
+                startTerminal(session.session_id, finalDir);
+            });
+
+            return item;
+        }
+
+        // Helper to format time ago
+        function formatTimeAgo(date) {
+            const now = new Date();
+            const seconds = Math.floor((now - date) / 1000);
+
+            if (seconds < 60) return 'just now';
+            const minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return `${minutes}m ago`;
+            const hours = Math.floor(minutes / 60);
+            if (hours < 24) return `${hours}h ago`;
+            const days = Math.floor(hours / 24);
+            if (days < 7) return `${days}d ago`;
+            const weeks = Math.floor(days / 7);
+            if (weeks < 4) return `${weeks}w ago`;
+            const months = Math.floor(days / 30);
+            return `${months}mo ago`;
+        }
+
+        // Start terminal for session
+        function startTerminal(sessionId, projectDir) {
+            console.log('Starting terminal for session:', sessionId, 'projectDir:', projectDir);
+
+            // Use active connection if available, otherwise fall back to legacy
+            const connIndex = state.activeConnectionTab;
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                startTerminalForConnection(connIndex, sessionId, projectDir);
+                return;
+            }
+
+            // LEGACY: Old single-connection code
+            // Check if tab already exists
+            if (state.tabs[sessionId]) {
+                switchTab(sessionId);
+                return;
+            }
+
+            // Create new tab with project path as title
+            const tabTitle = projectDir || sessionId.substring(0, 8);
+            const tabInfo = createTab(sessionId, tabTitle);
+
+            // Switch to new tab
+            switchTab(sessionId);
+
+            // Write initial messages to the new terminal
+            tabInfo.terminal.writeln(`Starting Claude CLI for session ${sessionId}...`);
+            if (projectDir) {
+                tabInfo.terminal.writeln(`Working directory: ${projectDir}`);
+            }
+
+            const skipPermissions = document.getElementById('skipPermissions').checked;
+            if (skipPermissions) {
+                tabInfo.terminal.writeln('(with --dangerously-skip-permissions)');
+            }
+
+            // Load personal preferences from settings
+            const personalPreferences = localStorage.getItem('claudePersonalPreferences');
+            if (personalPreferences && personalPreferences.trim()) {
+                tabInfo.terminal.writeln('(with personal preferences)');
+            }
+
+            tabInfo.terminal.writeln('Please wait...');
+
+            const message = {
+                type: 'start_terminal',
+                session_id: sessionId,
+                project_dir: projectDir,
+                skip_permissions: skipPermissions,
+                use_continue: true,  // Use --continue instead of --resume
+                personal_preferences: personalPreferences || null
+            };
+            console.log('Sending start_terminal message:', message);
+            sendMessage(message);
+        }
+
+        function startTerminalForConnection(connIndex, sessionId, projectDir) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) return;
+
+            console.log(`Starting terminal for connection ${connIndex}, session:`, sessionId);
+
+            // Check if tab already exists
+            if (connTab.tabs[sessionId]) {
+                switchTabForConnection(connIndex, sessionId);
+                return;
+            }
+
+            // Create new tab with project path as title
+            const tabTitle = projectDir || sessionId.substring(0, 8);
+            const tabInfo = createTabForConnection(connIndex, sessionId, tabTitle);
+
+            if (!tabInfo) return;
+
+            // Switch to new tab
+            switchTabForConnection(connIndex, sessionId);
+
+            // Write initial messages to the new terminal
+            tabInfo.terminal.writeln(`Starting Claude CLI for session ${sessionId}...`);
+            if (projectDir) {
+                tabInfo.terminal.writeln(`Working directory: ${projectDir}`);
+            }
+
+            const skipPermissions = document.getElementById('skipPermissions').checked;
+            if (skipPermissions) {
+                tabInfo.terminal.writeln('(with --dangerously-skip-permissions)');
+            }
+
+            // Load personal preferences from settings
+            const personalPreferences = localStorage.getItem('claudePersonalPreferences');
+            if (personalPreferences && personalPreferences.trim()) {
+                tabInfo.terminal.writeln('(with personal preferences)');
+            }
+
+            tabInfo.terminal.writeln('Please wait...');
+
+            // Set a timeout to warn if session doesn't start
+            const timeoutId = setTimeout(() => {
+                if (connTab.tabs[sessionId]) {
+                    const tab = connTab.tabs[sessionId];
+                    if (tab.terminal) {
+                        tab.terminal.writeln('');
+                        tab.terminal.writeln('\x1b[33m⚠️  Session is taking longer than expected to start.\x1b[0m');
+                        tab.terminal.writeln('\x1b[33mThis may indicate the session file no longer exists on the server.\x1b[0m');
+                        tab.terminal.writeln('\x1b[33mTry creating a new session instead.\x1b[0m');
+                    }
+                }
+            }, 15000); // 15 second timeout
+
+            // Store timeout ID so we can clear it on success
+            tabInfo.startTimeout = timeoutId;
+
+            // Send message to correct connection's WebSocket
+            if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                const message = {
+                    type: 'start_terminal',
+                    session_id: sessionId,
+                    project_dir: projectDir,
+                    skip_permissions: skipPermissions,
+                    use_continue: true,
+                    personal_preferences: personalPreferences || null
+                };
+                console.log('Sending start_terminal message to connection:', connIndex, message);
+                connTab.websocket.send(JSON.stringify(message));
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.style.display = 'block';
+            statusEl.style.background = type === 'error' ? '#ff4a4a' : '#4aff4a';
+            statusEl.style.color = type === 'error' ? '#fff' : '#000';
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 5000);
+        }
+
+        // Open shell terminal
+        function openShellTerminal() {
+            const shellId = 'shell-' + Date.now();
+
+            // Use active connection if available
+            const connIndex = state.activeConnectionTab;
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                const connTab = state.connectionTabs[connIndex];
+
+                // Create new shell tab for this connection (allow multiple shells)
+                const tabInfo = createTabForConnection(connIndex, shellId, '🖥️ Shell');
+
+                if (!tabInfo) return;
+
+                // Switch to new tab
+                switchTabForConnection(connIndex, shellId);
+
+                // Write initial messages
+                tabInfo.terminal.writeln('Starting shell terminal...');
+                tabInfo.terminal.writeln('Please wait...');
+
+                // Send to this connection's WebSocket
+                if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                    connTab.websocket.send(JSON.stringify({
+                        type: 'start_shell',
+                        session_id: shellId,
+                        skip_permissions: false
+                    }));
+                }
+                return;
+            }
+
+            // LEGACY: Old single-connection code (also allow multiple shells)
+
+            // Create new shell tab
+            const tabInfo = createTab(shellId, '🖥️ Shell');
+
+            // Switch to new tab
+            switchTab(shellId);
+
+            // Write initial messages
+            tabInfo.terminal.writeln('Starting shell terminal...');
+            tabInfo.terminal.writeln('Please wait...');
+
+            sendMessage({
+                type: 'start_shell',
+                session_id: shellId,
+                skip_permissions: false
+            });
+        }
+
+        // Open file explorer
+        function openFileExplorer() {
+            const explorerId = 'explorer-' + Date.now();
+
+            // Use active connection if available
+            const connIndex = state.activeConnectionTab;
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                const connTab = state.connectionTabs[connIndex];
+
+                // Check if a file explorer tab already exists for this connection
+                const existingExplorer = Object.keys(connTab.tabs).find(id => id.startsWith('explorer-'));
+                if (existingExplorer) {
+                    switchTabForConnection(connIndex, existingExplorer);
+                    return;
+                }
+
+                // Create file explorer tab for this connection
+                createFileExplorerTab(explorerId, '📁 File Explorer', '/home', connIndex);
+                return;
+            }
+
+            // LEGACY: Old single-connection code
+            // Check if a file explorer tab already exists
+            const existingExplorer = Object.keys(state.tabs).find(id => id.startsWith('explorer-'));
+            if (existingExplorer) {
+                switchTab(existingExplorer);
+                return;
+            }
+
+            // Create file explorer tab
+            createFileExplorerTab(explorerId, '📁 File Explorer', '/home');
+        }
+
+        // Create file explorer tab
+        function createFileExplorerTab(sessionId, title, initialPath, connIndex = null) {
+            // If connIndex provided, use connection-scoped implementation
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                const connTab = state.connectionTabs[connIndex];
+
+                // Create wrapper
+                const wrapper = document.createElement('div');
+                wrapper.className = 'file-explorer-wrapper';
+                wrapper.id = `explorer-${connIndex}-${sessionId}`;
+                wrapper.style.display = 'none'; // Hidden by default
+
+                // Create toolbar
+                const toolbar = document.createElement('div');
+                toolbar.className = 'file-explorer-toolbar';
+                toolbar.innerHTML = `
+                    <button class="file-action-btn" onclick="navigateUp('${sessionId}')">⬆️ Up</button>
+                    <button class="file-action-btn" onclick="refreshExplorer('${sessionId}')">🔄 Refresh</button>
+                    <input type="text" class="file-explorer-path" id="path-${sessionId}" value="${initialPath}" readonly>
+                    <input type="file" id="upload-${sessionId}" style="display: none;" multiple>
+                    <button class="file-action-btn" onclick="document.getElementById('upload-${sessionId}').click()">⬆️ Upload</button>
+                `;
+
+                // Create content area
+                const content = document.createElement('div');
+                content.className = 'file-explorer-content';
+                content.id = `content-${sessionId}`;
+
+                wrapper.appendChild(toolbar);
+                wrapper.appendChild(content);
+                document.getElementById('terminalsContainer').appendChild(wrapper);
+
+                // Create tab element
+                const tab = document.createElement('div');
+                tab.className = 'tab';
+                tab.style.display = 'none'; // Hidden by default
+                tab.innerHTML = `
+                    <span class="tab-title">${title}</span>
+                    <span class="tab-close" data-session="${sessionId}" data-conn="${connIndex}">×</span>
+                `;
+
+                tab.querySelector('.tab-title').addEventListener('click', () => switchTabForConnection(connIndex, sessionId));
+                tab.querySelector('.tab-close').addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    closeTabForConnection(connIndex, sessionId);
+                });
+
+                document.getElementById('tabsContainer').appendChild(tab);
+
+                // Store in connection's tab collection
+                connTab.tabs[sessionId] = {
+                    element: wrapper,
+                    tabElement: tab,
+                    sessionId,
+                    title,
+                    currentPath: initialPath,
+                    type: 'explorer',
+                    connectionIndex: connIndex
+                };
+
+                // Setup upload handler
+                document.getElementById(`upload-${sessionId}`).addEventListener('change', (e) => uploadFilesToPath(sessionId, e));
+
+                // If this is the active connection, show the tab
+                if (state.activeConnectionTab === connIndex) {
+                    tab.style.display = 'flex';
+                }
+
+                // Switch to tab and load directory
+                switchTabForConnection(connIndex, sessionId);
+                loadDirectory(sessionId, initialPath);
+
+                return connTab.tabs[sessionId];
+            }
+
+            // LEGACY: Old single-connection code
+            // Create wrapper
+            const wrapper = document.createElement('div');
+            wrapper.className = 'file-explorer-wrapper';
+            wrapper.id = `explorer-${sessionId}`;
+
+            // Create toolbar
+            const toolbar = document.createElement('div');
+            toolbar.className = 'file-explorer-toolbar';
+            toolbar.innerHTML = `
+                <button class="file-action-btn" onclick="navigateUp('${sessionId}')">⬆️ Up</button>
+                <button class="file-action-btn" onclick="refreshExplorer('${sessionId}')">🔄 Refresh</button>
+                <input type="text" class="file-explorer-path" id="path-${sessionId}" value="${initialPath}" readonly>
+                <input type="file" id="upload-${sessionId}" style="display: none;" multiple>
+                <button class="file-action-btn" onclick="document.getElementById('upload-${sessionId}').click()">⬆️ Upload</button>
+            `;
+
+            // Create content area
+            const content = document.createElement('div');
+            content.className = 'file-explorer-content';
+            content.id = `content-${sessionId}`;
+
+            wrapper.appendChild(toolbar);
+            wrapper.appendChild(content);
+            document.getElementById('terminalsContainer').appendChild(wrapper);
+
+            // Create tab element
+            const tab = document.createElement('div');
+            tab.className = 'tab';
+            tab.innerHTML = `
+                <span class="tab-title">${title}</span>
+                <span class="tab-close" data-session="${sessionId}">×</span>
+            `;
+
+            tab.querySelector('.tab-title').addEventListener('click', () => switchTab(sessionId));
+            tab.querySelector('.tab-close').addEventListener('click', (e) => {
+                e.stopPropagation();
+                closeTab(sessionId);
+            });
+
+            document.getElementById('tabsContainer').appendChild(tab);
+
+            // Store in state
+            state.tabs[sessionId] = {
+                element: wrapper,
+                tabElement: tab,
+                sessionId,
+                title,
+                currentPath: initialPath,
+                type: 'explorer'
+            };
+
+            // Setup upload handler
+            document.getElementById(`upload-${sessionId}`).addEventListener('change', (e) => uploadFilesToPath(sessionId, e));
+
+            // Switch to tab and load directory
+            switchTab(sessionId);
+            loadDirectory(sessionId, initialPath);
+
+            return state.tabs[sessionId];
+        }
+
+        // Load directory contents
+        function loadDirectory(sessionId, path) {
+            // Try to find the tab in connection tabs first
+            let tab = null;
+            let connIndex = null;
+
+            for (const [idx, connTab] of Object.entries(state.connectionTabs)) {
+                if (connTab.tabs[sessionId]) {
+                    tab = connTab.tabs[sessionId];
+                    connIndex = parseInt(idx);
+                    break;
+                }
+            }
+
+            // Fall back to legacy state.tabs
+            if (!tab) {
+                tab = state.tabs[sessionId];
+            }
+
+            if (!tab) return;
+
+            tab.currentPath = path;
+            document.getElementById(`path-${sessionId}`).value = path;
+
+            // Request directory listing from server
+            const message = {
+                type: 'list_directory',
+                session_id: sessionId,
+                path: path
+            };
+
+            // Send to correct connection's WebSocket
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                const connTab = state.connectionTabs[connIndex];
+                if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                    connTab.websocket.send(JSON.stringify(message));
+                }
+            } else {
+                // Legacy single connection
+                sendMessage(message);
+            }
+
+            // Show loading
+            const content = document.getElementById(`content-${sessionId}`);
+            content.innerHTML = '<div style="color: #888; padding: 20px;">Loading...</div>';
+        }
+
+        // Navigate up one directory
+        function navigateUp(sessionId) {
+            // Find tab in connection tabs or legacy state
+            let tab = null;
+            for (const connTab of Object.values(state.connectionTabs)) {
+                if (connTab.tabs[sessionId]) {
+                    tab = connTab.tabs[sessionId];
+                    break;
+                }
+            }
+            if (!tab) tab = state.tabs[sessionId];
+            if (!tab) return;
+
+            const currentPath = tab.currentPath;
+            const parentPath = currentPath.split('/').slice(0, -1).join('/') || '/';
+            loadDirectory(sessionId, parentPath);
+        }
+
+        // Refresh explorer
+        function refreshExplorer(sessionId) {
+            // Find tab in connection tabs or legacy state
+            let tab = null;
+            for (const connTab of Object.values(state.connectionTabs)) {
+                if (connTab.tabs[sessionId]) {
+                    tab = connTab.tabs[sessionId];
+                    break;
+                }
+            }
+            if (!tab) tab = state.tabs[sessionId];
+            if (!tab) return;
+            loadDirectory(sessionId, tab.currentPath);
+        }
+
+        // Render directory contents
+        function renderDirectoryContents(sessionId, files) {
+            const content = document.getElementById(`content-${sessionId}`);
+            if (!content) return;
+
+            content.innerHTML = '';
+
+            if (!files || files.length === 0) {
+                content.innerHTML = '<div style="color: #888; padding: 20px;">Empty directory</div>';
+                return;
+            }
+
+            files.forEach(file => {
+                const item = document.createElement('div');
+                item.className = 'file-item' + (file.is_directory ? ' directory' : '');
+
+                const icon = file.is_directory ? '📁' : '📄';
+                const size = file.is_directory ? '' : formatFileSize(file.size);
+
+                item.innerHTML = `
+                    <span class="file-item-icon">${icon}</span>
+                    <span class="file-item-name">${file.name}</span>
+                    <span class="file-item-size">${size}</span>
+                    <div class="file-item-actions">
+                        ${!file.is_directory ? `<button class="file-action-btn" onclick="downloadFile('${sessionId}', '${file.path}', '${file.name}')">⬇️ Download</button>` : ''}
+                    </div>
+                `;
+
+                if (file.is_directory) {
+                    item.addEventListener('click', () => {
+                        loadDirectory(sessionId, file.path);
+                    });
+                }
+
+                content.appendChild(item);
+            });
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Download file
+        function downloadFile(sessionId, filePath, fileName) {
+            // Try to find the tab in connection tabs first
+            let connIndex = null;
+
+            for (const [idx, connTab] of Object.entries(state.connectionTabs)) {
+                if (connTab.tabs[sessionId]) {
+                    connIndex = parseInt(idx);
+                    break;
+                }
+            }
+
+            const message = {
+                type: 'download_file',
+                session_id: sessionId,
+                path: filePath
+            };
+
+            // Send to correct connection's WebSocket
+            if (connIndex !== null && state.connectionTabs[connIndex]) {
+                const connTab = state.connectionTabs[connIndex];
+                if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                    connTab.websocket.send(JSON.stringify(message));
+                }
+            } else {
+                // Legacy single connection
+                sendMessage(message);
+            }
+        }
+
+        // Upload files to current path
+        function uploadFilesToPath(sessionId, event) {
+            const files = event.target.files;
+
+            // Try to find the tab in connection tabs first
+            let tab = null;
+            let connIndex = null;
+
+            for (const [idx, connTab] of Object.entries(state.connectionTabs)) {
+                if (connTab.tabs[sessionId]) {
+                    tab = connTab.tabs[sessionId];
+                    connIndex = parseInt(idx);
+                    break;
+                }
+            }
+
+            // Fall back to legacy state.tabs
+            if (!tab) {
+                tab = state.tabs[sessionId];
+            }
+
+            if (!files || !tab) return;
+
+            Array.from(files).forEach(file => {
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    const base64Content = btoa(e.target.result);
+                    const message = {
+                        type: 'upload_file_to_path',
+                        session_id: sessionId,
+                        path: tab.currentPath,
+                        filename: file.name,
+                        content: base64Content,
+                        size: file.size
+                    };
+
+                    // Send to correct connection's WebSocket
+                    if (connIndex !== null && state.connectionTabs[connIndex]) {
+                        const connTab = state.connectionTabs[connIndex];
+                        if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                            connTab.websocket.send(JSON.stringify(message));
+                        }
+                    } else {
+                        // Legacy single connection
+                        sendMessage(message);
+                    }
+                };
+                reader.readAsBinaryString(file);
+            });
+
+            // Clear input
+            event.target.value = '';
+        }
+
+        // Handle file upload
+        function handleFileUpload() {
+            // Check if there's an active connection
+            if (state.activeConnectionTab === null) {
+                showStatus('No active connection. Please connect to a server first.', 'error');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.connected) {
+                showStatus('Connection not established. Please wait for connection.', 'error');
+                return;
+            }
+
+            document.getElementById('fileInput').click();
+        }
+
+        // Show new session modal
+        function showNewSessionModal() {
+            const modal = document.getElementById('newSessionModal');
+            document.getElementById('newSessionForm').reset();
+            modal.style.display = 'flex';
+        }
+
+        // Hide new session modal
+        function hideNewSessionModal() {
+            document.getElementById('newSessionModal').style.display = 'none';
+            document.getElementById('newSessionForm').reset();
+        }
+
+        // Show resume session modal
+        function showResumeSessionModal() {
+            const modal = document.getElementById('resumeSessionModal');
+            const listDiv = document.getElementById('resumeSessionList');
+
+            // Get active connection
+            if (state.activeConnectionTab === null) {
+                showStatus('No active connection', 'error');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.connected) {
+                showStatus('Connection not established', 'error');
+                return;
+            }
+
+            // Populate list with sessions from the sessions list
+            listDiv.innerHTML = '<div class="loading">Loading sessions...</div>';
+
+            // Get sessions for this connection
+            const sessionsData = connTab.sessions || {};
+            const projects = sessionsData.projects || {};
+
+            // Get unique directories
+            const uniqueDirectories = new Set();
+            for (const [projectName, projectData] of Object.entries(projects)) {
+                const directories = projectData.directories || {};
+                for (const [dirPath, sessions] of Object.entries(directories)) {
+                    uniqueDirectories.add(dirPath);
+                }
+            }
+
+            if (uniqueDirectories.size === 0) {
+                listDiv.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No sessions found. Click "Refresh Sessions" to load sessions.</div>';
+            } else {
+                listDiv.innerHTML = '';
+
+                // Sort directories alphabetically
+                const sortedDirs = Array.from(uniqueDirectories).sort();
+
+                sortedDirs.forEach(directory => {
+                    const btn = document.createElement('button');
+                    btn.className = 'session-item';
+                    btn.style.cssText = 'width: 100%; padding: 12px; margin-bottom: 8px; background: #2a2a2a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; cursor: pointer; text-align: left; transition: all 0.2s;';
+
+                    // Show just the directory name
+                    const dirName = directory.split('/').filter(p => p).pop() || directory;
+
+                    btn.innerHTML = `
+                        <div style="font-weight: 600; margin-bottom: 4px;">📁 ${dirName}</div>
+                        <div style="font-size: 12px; color: #888;">${directory}</div>
+                    `;
+
+                    btn.onmouseover = () => btn.style.background = '#3a3a3a';
+                    btn.onmouseout = () => btn.style.background = '#2a2a2a';
+
+                    btn.onclick = () => {
+                        hideResumeSessionModal();
+                        resumeSessionInDirectory(directory);
+                    };
+
+                    listDiv.appendChild(btn);
+                });
+            }
+
+            modal.style.display = 'flex';
+        }
+
+        // Hide resume session modal
+        function hideResumeSessionModal() {
+            document.getElementById('resumeSessionModal').style.display = 'none';
+        }
+
+        // Resume session in a specific directory
+        function resumeSessionInDirectory(directory) {
+            const connIndex = state.activeConnectionTab;
+            if (connIndex === null) {
+                showStatus('No active connection', 'error');
+                return;
+            }
+
+            const activeConn = state.connectionTabs[connIndex];
+            if (!activeConn || !activeConn.connected) {
+                showStatus('Connection not established', 'error');
+                return;
+            }
+
+            // Create a new session with --resume flag
+            const sessionId = 'session-' + Date.now();
+            const title = `Resume: ${directory.split('/').pop() || directory}`;
+
+            // Create tab for this session
+            createTab(sessionId, `🔄 ${title}`, connIndex);
+
+            // Switch to the newly created tab
+            switchTabForConnection(connIndex, sessionId);
+
+            // Prepare the resume command
+            const skipPermissions = document.getElementById('skipPermissions').checked;
+
+            showStatus(`Resuming session in ${directory}...`, 'info');
+
+            const message = {
+                type: 'start_new_session',
+                session_id: sessionId,
+                title: title,
+                directory: directory,
+                initial_prompt: null,
+                skip_permissions: skipPermissions,
+                personal_preferences: localStorage.getItem('claudePersonalPreferences') || null,
+                resume: true  // Flag to indicate we want to resume
+            };
+
+            // Send to correct connection's WebSocket
+            if (activeConn.websocket && activeConn.websocket.readyState === WebSocket.OPEN) {
+                activeConn.websocket.send(JSON.stringify(message));
+            } else {
+                showStatus('WebSocket not connected', 'error');
+            }
+        }
+
+        // Show settings modal
+        async function showSettingsModal() {
+            const modal = document.getElementById('settingsModal');
+            const preferences = await loadPreferences();
+            document.getElementById('personalPreferences').value = preferences;
+            modal.style.display = 'flex';
+        }
+
+        // Hide settings modal
+        function hideSettingsModal() {
+            document.getElementById('settingsModal').style.display = 'none';
+        }
+
+        // Show deploy modal
+        function showDeployModal() {
+            const modal = document.getElementById('deployModal');
+            modal.style.display = 'flex';
+
+            // Attach copy button handler
+            const copyBtn = document.getElementById('copyDeployBtn');
+            if (copyBtn && !copyBtn.hasAttribute('data-listener-attached')) {
+                copyBtn.addEventListener('click', copyDeployCommand);
+                copyBtn.setAttribute('data-listener-attached', 'true');
+            }
+        }
+
+        // Hide deploy modal
+        function hideDeployModal() {
+            document.getElementById('deployModal').style.display = 'none';
+        }
+
+        // Copy deploy command to clipboard
+        function copyDeployCommand(event) {
+            console.log('Copy button clicked');
+
+            const commandEl = document.getElementById('deployCommand');
+            if (!commandEl) {
+                console.error('Deploy command element not found');
+                alert('Error: Command element not found');
+                return;
+            }
+
+            const command = commandEl.textContent.trim();
+            console.log('Command to copy:', command);
+
+            const btn = event.target.closest('button');
+            if (!btn) {
+                console.error('Button not found');
+                return;
+            }
+
+            const originalText = btn.textContent;
+
+            // Try clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(command).then(() => {
+                    console.log('Copied successfully via Clipboard API');
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#3a9e3a';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '#3a3a3a';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(command, btn, originalText);
+                });
+            } else {
+                console.log('Clipboard API not available, using fallback');
+                fallbackCopy(command, btn, originalText);
+            }
+        }
+
+        // Fallback copy method
+        function fallbackCopy(text, btn, originalText) {
+            const textArea = document.createElement('textarea');
+            textArea.value = text;
+            textArea.style.position = 'fixed';
+            textArea.style.left = '-999999px';
+            textArea.style.top = '0';
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+
+            try {
+                const successful = document.execCommand('copy');
+                if (successful) {
+                    console.log('Copied successfully via execCommand');
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#3a9e3a';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '#3a3a3a';
+                    }, 2000);
+                } else {
+                    console.error('execCommand copy failed');
+                    alert('Copy failed. Please copy manually:\n\n' + text);
+                }
+            } catch (err) {
+                console.error('execCommand error:', err);
+                alert('Copy failed. Please copy manually:\n\n' + text);
+            } finally {
+                document.body.removeChild(textArea);
+            }
+        }
+
+        // Save settings
+        async function saveSettings() {
+            const preferences = document.getElementById('personalPreferences').value;
+            const success = await savePreferences(preferences);
+            if (success) {
+                const terminal = getActiveTerminal();
+                if (terminal) {
+                    terminal.writeln(`\x1b[32m✓ Settings saved successfully to server!\x1b[0m`);
+                }
+                hideSettingsModal();
+
+                // Sync preferences to all connected bridge servers
+                await syncPreferencesToAllConnections();
+            }
+        }
+
+        // Clear settings
+        async function clearSettings() {
+            if (confirm('Are you sure you want to clear your personal preferences?')) {
+                const success = await savePreferences('');
+                if (success) {
+                    document.getElementById('personalPreferences').value = '';
+                    const terminal = getActiveTerminal();
+                    if (terminal) {
+                        terminal.writeln(`\x1b[33m⚠ Settings cleared from server\x1b[0m`);
+                    }
+
+                    // Sync (clear) preferences to all connected bridge servers
+                    await syncPreferencesToAllConnections();
+                }
+            }
+        }
+
+        // Sync preferences to all connected bridge servers
+        async function syncPreferencesToAllConnections(syncToExisting = true) {
+            const preferences = await loadPreferences();
+
+            // Send to all connected bridges
+            for (let connIndex = 0; connIndex < state.connectionTabs.length; connIndex++) {
+                const connTab = state.connectionTabs[connIndex];
+                if (connTab && connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                    connTab.websocket.send(JSON.stringify({
+                        type: 'sync_preferences',
+                        preferences: preferences,
+                        syncToExisting: syncToExisting
+                    }));
+                }
+            }
+        }
+
+        // Create new session
+        function createNewSession(event) {
+            event.preventDefault();
+
+            const title = document.getElementById('sessionTitle').value;
+            const directory = document.getElementById('sessionDirectory').value.trim();
+            const initialPrompt = document.getElementById('sessionPrompt').value.trim();
+
+            // Generate a session ID for the new tab
+            const sessionId = 'new-' + Date.now();
+
+            // Check if we have an active connection
+            const activeConn = getActiveConnection();
+            let tabInfo;
+
+            if (activeConn && state.activeConnectionTab !== null) {
+                // Use connection-based tab creation
+                tabInfo = createTabForConnection(state.activeConnectionTab, sessionId, title);
+                if (tabInfo) {
+                    switchTabForConnection(state.activeConnectionTab, sessionId);
+                }
+            } else {
+                // Fall back to legacy single-connection mode
+                tabInfo = createTab(sessionId, title);
+                switchTab(sessionId);
+            }
+
+            if (!tabInfo) {
+                showStatus('Failed to create session tab', 'error');
+                return;
+            }
+
+            hideNewSessionModal();
+
+            tabInfo.terminal.writeln(`\x1b[36m➕ Creating new session: ${title}\x1b[0m`);
+            if (directory) {
+                tabInfo.terminal.writeln(`Working directory: ${directory}`);
+            }
+
+            const skipPermissions = document.getElementById('skipPermissions').checked;
+            if (skipPermissions) {
+                tabInfo.terminal.writeln('(with --dangerously-skip-permissions)');
+            }
+
+            // Load personal preferences
+            const personalPreferences = localStorage.getItem('claudePersonalPreferences');
+            if (personalPreferences && personalPreferences.trim()) {
+                tabInfo.terminal.writeln('(with personal preferences)');
+            }
+
+            tabInfo.terminal.writeln('Please wait...');
+
+            const message = {
+                type: 'start_new_session',
+                session_id: sessionId,
+                title: title,
+                directory: directory || null,
+                initial_prompt: initialPrompt || null,
+                skip_permissions: skipPermissions,
+                personal_preferences: personalPreferences || null
+            };
+
+            // Send to correct connection's WebSocket
+            if (activeConn && activeConn.websocket && activeConn.websocket.readyState === WebSocket.OPEN) {
+                activeConn.websocket.send(JSON.stringify(message));
+            } else {
+                // Legacy single connection
+                sendMessage(message);
+            }
+        }
+
+        // Process selected files
+        async function processFiles(event) {
+            const files = event.target.files;
+            if (!files || files.length === 0) return;
+
+            // Check for active connection
+            if (state.activeConnectionTab === null) {
+                showStatus('No active connection', 'error');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.connected) {
+                showStatus('Connection not established', 'error');
+                return;
+            }
+
+            // Use active session if available, otherwise upload to home directory
+            const sessionId = connTab.activeTab;
+            const uploadPath = sessionId ? null : '/home'; // null means use session's current dir
+
+            showStatus(`Uploading ${files.length} file(s)...`, 'info');
+
+            for (const file of files) {
+                try {
+                    const reader = new FileReader();
+
+                    reader.onload = async (e) => {
+                        const content = e.target.result;
+                        const base64Content = btoa(content);
+
+                        const message = {
+                            type: 'upload_file',
+                            filename: file.name,
+                            content: base64Content,
+                            size: file.size
+                        };
+
+                        // Add session_id if we have an active session
+                        if (sessionId) {
+                            message.session_id = sessionId;
+                        } else {
+                            // Upload to specific path if no session
+                            message.path = uploadPath;
+                        }
+
+                        // Send to active connection's WebSocket
+                        if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                            connTab.websocket.send(JSON.stringify(message));
+                            console.log(`Uploading ${file.name} to ${sessionId ? 'session ' + sessionId : uploadPath}`);
+                        }
+                    };
+
+                    reader.onerror = () => {
+                        showStatus(`Failed to read: ${file.name}`, 'error');
+                    };
+
+                    reader.readAsBinaryString(file);
+                } catch (error) {
+                    showStatus(`Error uploading ${file.name}: ${error.message}`, 'error');
+                }
+            }
+
+            // Clear the file input
+            event.target.value = '';
+        }
+
+        // Sidebar resize functionality
+        function initSidebarResize() {
+            const sidebar = document.querySelector('.sidebar');
+            const resizer = document.querySelector('.sidebar-resizer');
+
+            if (!sidebar || !resizer) return;
+
+            let isResizing = false;
+            let startX = 0;
+            let startWidth = 0;
+
+            // Load saved width from localStorage
+            const savedWidth = localStorage.getItem('sidebarWidth');
+            if (savedWidth) {
+                sidebar.style.width = savedWidth + 'px';
+            }
+
+            resizer.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = sidebar.offsetWidth;
+                resizer.classList.add('resizing');
+                document.body.style.cursor = 'ew-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+
+                const delta = e.clientX - startX;
+                const newWidth = startWidth + delta;
+
+                // Get min/max from CSS or use defaults
+                const minWidth = 250;
+                const maxWidth = 800;
+
+                if (newWidth >= minWidth && newWidth <= maxWidth) {
+                    sidebar.style.width = newWidth + 'px';
+
+                    // Fit terminals to new size
+                    Object.values(state.tabs).forEach(tab => {
+                        if (tab.term && tab.fitAddon) {
+                            setTimeout(() => tab.fitAddon.fit(), 0);
+                        }
+                    });
+                }
+            });
+
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    resizer.classList.remove('resizing');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+
+                    // Save width to localStorage
+                    localStorage.setItem('sidebarWidth', sidebar.offsetWidth);
+                }
+            });
+        }
+
+        // Version constants
+        const WEB_APP_VERSION = '1.4.6';  // Web interface version (port 8888)
+        const BRIDGE_VERSION = '1.8.1';    // Bridge server version (manually synced)
+
+        // Update metrics display
+        function updateMetricsDisplay(metrics, serverName) {
+            document.getElementById('metricServerName').textContent = serverName || '--';
+            document.getElementById('metricCpu').textContent = `${metrics.cpu_percent}%`;
+            document.getElementById('metricRam').textContent = `${metrics.memory_percent}%`;
+            document.getElementById('metricDiskAvail').textContent = `${metrics.disk_free_gb}G`;
+            document.getElementById('metricDiskPercent').textContent = `${metrics.disk_percent}%`;
+            document.getElementById('metricUptime').textContent = metrics.uptime;
+
+            // Color code based on thresholds
+            const cpuEl = document.getElementById('metricCpu');
+            if (metrics.cpu_percent > 80) cpuEl.style.color = '#f44336';
+            else if (metrics.cpu_percent > 60) cpuEl.style.color = '#FF9800';
+            else cpuEl.style.color = '#4CAF50';
+
+            const ramEl = document.getElementById('metricRam');
+            if (metrics.memory_percent > 80) ramEl.style.color = '#f44336';
+            else if (metrics.memory_percent > 60) ramEl.style.color = '#FF9800';
+            else ramEl.style.color = '#2196F3';
+
+            const diskAvailEl = document.getElementById('metricDiskAvail');
+            const diskPercentEl = document.getElementById('metricDiskPercent');
+            if (metrics.disk_percent > 80) {
+                diskAvailEl.style.color = '#f44336';
+                diskPercentEl.style.color = '#f44336';
+            } else if (metrics.disk_percent > 60) {
+                diskAvailEl.style.color = '#FF9800';
+                diskPercentEl.style.color = '#FF9800';
+            } else {
+                diskAvailEl.style.color = '#4CAF50';
+                diskPercentEl.style.color = '#4CAF50';
+            }
+
+            // Store all disks data for popover
+            window.currentDiskData = metrics.all_disks || [];
+        }
+
+        // Request metrics from active connection
+        function requestMetrics() {
+            if (state.activeConnectionTab !== null) {
+                const connTab = state.connectionTabs[state.activeConnectionTab];
+                if (connTab && connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                    connTab.websocket.send(JSON.stringify({ type: 'get_metrics' }));
+                }
+            }
+        }
+
+        // Start metrics refresh timer (every 10 seconds)
+        let metricsTimer = null;
+        function startMetricsRefresh() {
+            if (metricsTimer) clearInterval(metricsTimer);
+            requestMetrics(); // Request immediately
+            metricsTimer = setInterval(requestMetrics, 10000); // Then every 10 seconds
+        }
+
+        function stopMetricsRefresh() {
+            if (metricsTimer) {
+                clearInterval(metricsTimer);
+                metricsTimer = null;
+            }
+        }
+
+        // Show disk popover with all disks (df -h style)
+        function showDiskPopover(event) {
+            console.log('Disk metric clicked, data:', window.currentDiskData);
+            const popover = document.getElementById('diskPopover');
+            const content = document.getElementById('diskPopoverContent');
+
+            if (!window.currentDiskData || window.currentDiskData.length === 0) {
+                console.log('No disk data available');
+                content.innerHTML = '<div style="padding: 10px; opacity: 0.7;">No disk data available</div>';
+            } else {
+                console.log('Displaying', window.currentDiskData.length, 'disks');
+                let html = '<table style="width: 100%; border-collapse: collapse; font-family: monospace; font-size: 12px;">';
+                html += '<thead><tr style="border-bottom: 1px solid #444; text-align: left;">';
+                html += '<th style="padding: 6px 8px; opacity: 0.7;">Filesystem</th>';
+                html += '<th style="padding: 6px 8px; opacity: 0.7; text-align: right;">Size</th>';
+                html += '<th style="padding: 6px 8px; opacity: 0.7; text-align: right;">Used</th>';
+                html += '<th style="padding: 6px 8px; opacity: 0.7; text-align: right;">Avail</th>';
+                html += '<th style="padding: 6px 8px; opacity: 0.7; text-align: right;">Use%</th>';
+                html += '<th style="padding: 6px 8px; opacity: 0.7;">Mounted on</th>';
+                html += '</tr></thead><tbody>';
+
+                window.currentDiskData.forEach(disk => {
+                    const percentColor = disk.percent > 80 ? '#f44336' : (disk.percent > 60 ? '#FF9800' : '#4CAF50');
+                    html += '<tr style="border-bottom: 1px solid #333;">';
+                    html += `<td style="padding: 6px 8px; overflow: hidden; text-overflow: ellipsis; max-width: 200px;" title="${disk.device}">${disk.device}</td>`;
+                    html += `<td style="padding: 6px 8px; text-align: right;">${disk.total_gb}G</td>`;
+                    html += `<td style="padding: 6px 8px; text-align: right;">${disk.used_gb}G</td>`;
+                    html += `<td style="padding: 6px 8px; text-align: right;">${disk.free_gb}G</td>`;
+                    html += `<td style="padding: 6px 8px; text-align: right; color: ${percentColor}; font-weight: bold;">${disk.percent}%</td>`;
+                    html += `<td style="padding: 6px 8px;">${disk.mountpoint}</td>`;
+                    html += '</tr>';
+                });
+
+                html += '</tbody></table>';
+                content.innerHTML = html;
+            }
+
+            // Position popover above the disk metric
+            const container = document.getElementById('diskMetricContainer');
+            const rect = container.getBoundingClientRect();
+
+            // Position popover above the disk metric with some spacing
+            const popoverHeight = 300; // Approximate height
+            const left = Math.max(10, rect.left - 150); // Center-ish relative to metric
+            const top = Math.max(10, rect.top - popoverHeight - 10);
+
+            popover.style.left = `${left}px`;
+            popover.style.top = `${top}px`;
+            popover.style.display = 'block';
+        }
+
+        function closeDiskPopover() {
+            document.getElementById('diskPopover').style.display = 'none';
+        }
+
+        // Close popover when clicking outside
+        document.addEventListener('click', function(event) {
+            const popover = document.getElementById('diskPopover');
+            const container = document.getElementById('diskMetricContainer');
+
+            if (popover && container &&
+                popover.style.display === 'block' &&
+                !popover.contains(event.target) &&
+                !container.contains(event.target)) {
+                closeDiskPopover();
+            }
+        });
+
+        // Fetch and display version information
+        async function loadVersionInfo() {
+            const versionInfo = document.getElementById('versionInfo');
+
+            // Just show both versions without fetching
+            // User can update BRIDGE_VERSION constant when they update the deployment server
+            versionInfo.innerHTML = `Web v${WEB_APP_VERSION} | Bridge v${BRIDGE_VERSION}`;
+            versionInfo.title = `Web Interface (port 8888): v${WEB_APP_VERSION}\nBridge Deployment (port 8889): v${BRIDGE_VERSION}`;
+        }
+
+        // Initialize
+        window.addEventListener('DOMContentLoaded', () => {
+            // Load connections first
+            loadConnections();
+
+            // Load version information
+            loadVersionInfo();
+
+            initTerminal();
+            // NOTE: No longer auto-connect - user must select connection and click Connect button
+            initSidebarResize();
+
+            // Disk metric click handler
+            document.getElementById('diskMetricContainer').addEventListener('click', showDiskPopover);
+
+            // Connection manager button handlers
+            document.getElementById('connectionSelect').addEventListener('change', switchConnection);
+            document.getElementById('connectBtn').addEventListener('click', () => {
+                const select = document.getElementById('connectionSelect');
+                const index = parseInt(select.value);
+                if (isNaN(index)) {
+                    alert('Please select a connection first');
+                    return;
+                }
+                openConnectionTab(index);
+            });
+            document.getElementById('addConnectionBtn').addEventListener('click', () => showConnectionModal());
+            document.getElementById('editConnectionBtn').addEventListener('click', () => {
+                const select = document.getElementById('connectionSelect');
+                const index = parseInt(select.value);
+                if (isNaN(index)) {
+                    alert('Please select a connection to edit');
+                    return;
+                }
+                showConnectionModal(index);
+            });
+            document.getElementById('connectionSettingsBtn').addEventListener('click', showSelectedConnectionSettings);
+            document.getElementById('connectionForm').addEventListener('submit', saveConnection);
+            document.getElementById('cancelBtn').addEventListener('click', hideConnectionModal);
+
+            // Add new session button handler
+            document.getElementById('newSessionBtn').addEventListener('click', showNewSessionModal);
+            document.getElementById('newSessionForm').addEventListener('submit', createNewSession);
+            document.getElementById('cancelNewSessionBtn').addEventListener('click', hideNewSessionModal);
+
+            // Add resume session button handler
+            document.getElementById('resumeSessionBtn').addEventListener('click', showResumeSessionModal);
+            document.getElementById('cancelResumeSessionBtn').addEventListener('click', hideResumeSessionModal);
+
+            // Add shell button handler
+            document.getElementById('openShellBtn').addEventListener('click', openShellTerminal);
+
+            // Add file explorer button handler
+            document.getElementById('fileExplorerBtn').addEventListener('click', openFileExplorer);
+
+            // Add refresh sessions button handler
+            document.getElementById('refreshSessionsBtn').addEventListener('click', refreshSessions);
+
+            // Add file upload handlers
+            document.getElementById('uploadFileBtn').addEventListener('click', handleFileUpload);
+            document.getElementById('fileInput').addEventListener('change', processFiles);
+
+            // Add settings modal handlers
+            document.getElementById('settingsBtn').addEventListener('click', showSettingsModal);
+            document.getElementById('saveSettingsBtn').addEventListener('click', saveSettings);
+            document.getElementById('clearSettingsBtn').addEventListener('click', clearSettings);
+            document.getElementById('cancelSettingsBtn').addEventListener('click', hideSettingsModal);
+
+            // Add deploy modal handlers
+            document.getElementById('deployBtn').addEventListener('click', showDeployModal);
+            document.getElementById('cancelDeployBtn').addEventListener('click', hideDeployModal);
+
+            // Cleanup on page unload/refresh
+            window.addEventListener('beforeunload', () => {
+                // Close all sessions before page closes
+                if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                    Object.keys(state.tabs).forEach(sessionId => {
+                        state.websocket.send(JSON.stringify({
+                            type: 'close_session',
+                            session_id: sessionId
+                        }));
+                    });
+                }
+            });
+
+            // Cleanup on visibility change (tab switch)
+            document.addEventListener('visibilitychange', () => {
+                if (document.hidden) {
+                    // Optionally close on tab hide - uncomment if desired
+                    // if (state.activeSession && state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                    //     state.websocket.send(JSON.stringify({
+                    //         type: 'close_session',
+                    //         session_id: state.activeSession
+                    //     }));
+                    // }
+                }
+            });
+        });
+    </script>
+</body>
+</html>

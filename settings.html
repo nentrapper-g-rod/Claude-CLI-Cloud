@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Claude CLI Terminal</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: #2d2d2d;
+            padding: 15px 20px;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-title {
+            font-size: 20px;
+            font-weight: 600;
+        }
+
+        .back-button {
+            padding: 8px 16px;
+            background: #4a9eff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            text-decoration: none;
+            font-size: 14px;
+        }
+
+        .back-button:hover {
+            background: #3a8eef;
+        }
+
+        .container {
+            flex: 1;
+            max-width: 800px;
+            margin: 40px auto;
+            padding: 20px;
+            width: 100%;
+            overflow-y: auto;
+        }
+
+        .settings-section {
+            background: #2d2d2d;
+            border: 1px solid #3a3a3a;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #4a9eff;
+        }
+
+        .section-description {
+            font-size: 14px;
+            color: #b0b0b0;
+            margin-bottom: 15px;
+            line-height: 1.5;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .form-group textarea {
+            width: 100%;
+            min-height: 150px;
+            padding: 12px;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            border: 1px solid #3a3a3a;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            resize: vertical;
+        }
+
+        .form-group textarea:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+
+        .button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+
+        .button-primary {
+            background: #4a9eff;
+            color: white;
+        }
+
+        .button-primary:hover {
+            background: #3a8eef;
+        }
+
+        .button-secondary {
+            background: #3a3a3a;
+            color: #e0e0e0;
+        }
+
+        .button-secondary:hover {
+            background: #4a4a4a;
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            display: none;
+        }
+
+        .status-success {
+            background: #2d5f2d;
+            color: #4aff4a;
+            border: 1px solid #3a8a3a;
+        }
+
+        .status-error {
+            background: #5f2d2d;
+            color: #ff4a4a;
+            border: 1px solid #8a3a3a;
+        }
+
+        .example-box {
+            background: #1a1a1a;
+            border: 1px solid #3a3a3a;
+            border-radius: 5px;
+            padding: 12px;
+            margin-top: 10px;
+            font-size: 13px;
+            color: #b0b0b0;
+        }
+
+        .example-box strong {
+            color: #4a9eff;
+            display: block;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="header-title">⚙️ Settings</div>
+        <a href="index.html" class="back-button">← Back to Terminal</a>
+    </div>
+
+    <div class="container">
+        <div id="statusMessage" class="status-message"></div>
+
+        <div class="settings-section">
+            <div class="section-title">Personal Preferences</div>
+            <div class="section-description">
+                Configure personal preferences that Claude should consider in all responses. This will be added to the system prompt when starting any Claude session.
+            </div>
+
+            <div class="form-group">
+                <label for="personalPreferences">Personal Preferences:</label>
+                <textarea
+                    id="personalPreferences"
+                    placeholder="Enter your preferences here. For example:
+- Use concise responses unless asked for detail
+- Prefer TypeScript over JavaScript
+- Use functional programming patterns
+- Avoid emojis in code comments"></textarea>
+            </div>
+
+            <div class="example-box">
+                <strong>Example preferences:</strong>
+                • I prefer direct, concise answers without excessive pleasantries<br>
+                • When writing code, use descriptive variable names<br>
+                • I work primarily with Python 3.11+ and modern JavaScript<br>
+                • For web development, I prefer React with TypeScript<br>
+                • Always include error handling in production code examples<br>
+                • Use async/await instead of promises .then() syntax
+            </div>
+
+            <div class="button-group">
+                <button id="saveBtn" class="button button-primary">💾 Save Settings</button>
+                <button id="clearBtn" class="button button-secondary">🗑️ Clear Settings</button>
+            </div>
+        </div>
+
+        <div class="settings-section">
+            <div class="section-title">How It Works</div>
+            <div class="section-description">
+                When you start a Claude session from the terminal interface, your personal preferences will be automatically included in the system prompt. This helps Claude tailor responses to your specific needs and preferences without having to remind it every time.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Load settings on page load
+        function loadSettings() {
+            const preferences = localStorage.getItem('claudePersonalPreferences') || '';
+            document.getElementById('personalPreferences').value = preferences;
+        }
+
+        // Save settings
+        function saveSettings() {
+            const preferences = document.getElementById('personalPreferences').value;
+            localStorage.setItem('claudePersonalPreferences', preferences);
+            showStatus('Settings saved successfully!', 'success');
+        }
+
+        // Clear settings
+        function clearSettings() {
+            if (confirm('Are you sure you want to clear your personal preferences?')) {
+                localStorage.removeItem('claudePersonalPreferences');
+                document.getElementById('personalPreferences').value = '';
+                showStatus('Settings cleared', 'success');
+            }
+        }
+
+        // Show status message
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('statusMessage');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+
+            setTimeout(() => {
+                statusEl.style.display = 'none';
+            }, 3000);
+        }
+
+        // Event listeners
+        document.getElementById('saveBtn').addEventListener('click', saveSettings);
+        document.getElementById('clearBtn').addEventListener('click', clearSettings);
+
+        // Load settings on page load
+        loadSettings();
+    </script>
+</body>
+</html>

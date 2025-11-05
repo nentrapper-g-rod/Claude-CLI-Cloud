@@ -1,0 +1,1770 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Remote Claude CLI Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #1a1a1a;
+            color: #e0e0e0;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header */
+        .header {
+            background: #252525;
+            padding: 12px 20px;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header-left {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .header-title {
+            font-size: 18px;
+            font-weight: 600;
+        }
+
+        .version {
+            font-size: 12px;
+            color: #b0b0b0;
+            background: #2d2d2d;
+            padding: 2px 8px;
+            border-radius: 3px;
+        }
+
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover {
+            background: #4a4a4a;
+        }
+
+        .btn-primary {
+            background: #4a9eff;
+        }
+
+        .btn-primary:hover {
+            background: #5aaeff;
+        }
+
+        /* Machine Selector Bar */
+        .machine-bar {
+            background: #2d2d2d;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3a3a3a;
+            display: flex;
+            gap: 10px;
+            overflow-x: auto;
+            white-space: nowrap;
+        }
+
+        .machine-btn {
+            background: #3a3a3a;
+            border: 2px solid #3a3a3a;
+            color: #e0e0e0;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 14px;
+            transition: all 0.2s;
+        }
+
+        .machine-btn.active {
+            background: #4a9eff;
+            border-color: #4a9eff;
+        }
+
+        .machine-btn:hover {
+            border-color: #4a9eff;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #ff4a4a;
+        }
+
+        .status-dot.online {
+            background: #4aff4a;
+        }
+
+        /* Main Container */
+        .main-container {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+        }
+
+        /* Sidebar */
+        .sidebar {
+            width: 280px;
+            background: #2d2d2d;
+            border-right: 1px solid #3a3a3a;
+            display: flex;
+            flex-direction: column;
+            transition: width 0.3s;
+        }
+
+        .sidebar.collapsed {
+            width: 0;
+            overflow: hidden;
+        }
+
+        .sidebar-header {
+            padding: 15px;
+            border-bottom: 1px solid #3a3a3a;
+        }
+
+        .new-session-btn {
+            width: 100%;
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .new-session-btn:hover {
+            background: #5aaeff;
+        }
+
+        .search-box {
+            width: 100%;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            padding: 8px 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .search-box:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .sessions-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 10px;
+        }
+
+        /* Tree View */
+        .project-section {
+            margin-bottom: 10px;
+        }
+
+        .project-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            transition: background 0.2s;
+            font-weight: 600;
+        }
+
+        .project-header:hover {
+            background: #3a3a3a;
+        }
+
+        .expand-icon {
+            font-size: 12px;
+            width: 12px;
+        }
+
+        .directory-section {
+            margin-left: 20px;
+        }
+
+        .directory-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 13px;
+            color: #b0b0b0;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .directory-header:hover {
+            background: #3a3a3a;
+        }
+
+        .session-item {
+            margin-left: 40px;
+            padding: 8px 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            margin-bottom: 5px;
+            transition: background 0.2s;
+        }
+
+        .session-item:hover {
+            background: #3a3a3a;
+        }
+
+        .session-item.active {
+            background: #4a9eff;
+        }
+
+        .session-preview {
+            font-size: 13px;
+            color: #e0e0e0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            margin-bottom: 4px;
+        }
+
+        .session-meta {
+            font-size: 11px;
+            color: #888;
+            display: flex;
+            gap: 10px;
+        }
+
+        /* Chat Container */
+        .chat-container {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .session-info-bar {
+            background: #252525;
+            padding: 10px 20px;
+            border-bottom: 1px solid #3a3a3a;
+            font-size: 13px;
+            color: #b0b0b0;
+            display: flex;
+            gap: 15px;
+        }
+
+        .session-info-bar strong {
+            color: #e0e0e0;
+        }
+
+        .messages-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+
+        .message {
+            display: flex;
+            gap: 10px;
+            max-width: 80%;
+        }
+
+        .message.user {
+            align-self: flex-end;
+            flex-direction: row-reverse;
+        }
+
+        .message.assistant {
+            align-self: flex-start;
+        }
+
+        .message.system {
+            align-self: center;
+            max-width: 90%;
+        }
+
+        .message-bubble {
+            background: #2d2d2d;
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+
+        .message.user .message-bubble {
+            background: #4a9eff;
+            color: white;
+        }
+
+        .message.assistant .message-bubble {
+            background: #3a3a3a;
+        }
+
+        .message.system .message-bubble {
+            background: #5a4a00;
+            text-align: center;
+            font-size: 13px;
+        }
+
+        .message.error .message-bubble {
+            background: #5a0000;
+        }
+
+        .message-timestamp {
+            font-size: 11px;
+            color: #888;
+            margin-top: 4px;
+        }
+
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 12px 16px;
+            background: #3a3a3a;
+            border-radius: 12px;
+            width: fit-content;
+        }
+
+        .typing-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #888;
+            animation: typing 1.4s infinite;
+        }
+
+        .typing-dot:nth-child(2) {
+            animation-delay: 0.2s;
+        }
+
+        .typing-dot:nth-child(3) {
+            animation-delay: 0.4s;
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                opacity: 0.3;
+            }
+            30% {
+                opacity: 1;
+            }
+        }
+
+        /* Input Area */
+        .input-area {
+            background: #252525;
+            border-top: 1px solid #3a3a3a;
+            padding: 15px 20px;
+        }
+
+        .input-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .input-controls select,
+        .input-controls input {
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            padding: 6px 10px;
+            border-radius: 5px;
+            font-size: 13px;
+        }
+
+        .input-controls select {
+            flex: 0 0 200px;
+        }
+
+        .input-controls input {
+            flex: 1;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .input-row {
+            display: flex;
+            gap: 10px;
+        }
+
+        .message-input {
+            flex: 1;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            padding: 12px;
+            border-radius: 5px;
+            font-size: 14px;
+            font-family: inherit;
+            resize: none;
+            min-height: 80px;
+            max-height: 200px;
+        }
+
+        .message-input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .send-btn {
+            background: #4a9eff;
+            color: white;
+            border: none;
+            padding: 12px 25px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            align-self: flex-end;
+        }
+
+        .send-btn:hover {
+            background: #5aaeff;
+        }
+
+        .send-btn:disabled {
+            background: #3a3a3a;
+            cursor: not-allowed;
+        }
+
+        /* File Upload */
+        .file-upload-area {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 10px;
+        }
+
+        .file-input-label {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            padding: 8px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 13px;
+            transition: background 0.2s;
+        }
+
+        .file-input-label:hover {
+            background: #4a4a4a;
+        }
+
+        .file-input {
+            display: none;
+        }
+
+        .attached-files {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .attached-file-chip {
+            background: #3a3a3a;
+            color: #e0e0e0;
+            padding: 5px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .attached-file-chip .remove-file {
+            cursor: pointer;
+            color: #ff4a4a;
+            font-weight: bold;
+        }
+
+        /* Tool Use Display */
+        .tool-use-message {
+            background: #2a2a4a;
+            border-left: 3px solid #4a9eff;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+            margin: 10px 0;
+        }
+
+        .tool-use-header {
+            color: #4a9eff;
+            font-weight: bold;
+            margin-bottom: 8px;
+        }
+
+        .tool-use-content {
+            color: #b0b0b0;
+            white-space: pre-wrap;
+            word-wrap: break-word;
+        }
+
+        .code-block {
+            background: #1a1a1a;
+            padding: 10px;
+            border-radius: 5px;
+            overflow-x: auto;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 12px;
+            line-height: 1.4;
+            margin: 8px 0;
+        }
+
+        /* Setup Panel */
+        .setup-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+
+        .setup-overlay.hidden {
+            display: none;
+        }
+
+        .setup-panel {
+            background: #2d2d2d;
+            border: 1px solid #3a3a3a;
+            border-radius: 10px;
+            padding: 30px;
+            max-width: 600px;
+            width: 90%;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .setup-header {
+            font-size: 24px;
+            font-weight: 600;
+            margin-bottom: 20px;
+        }
+
+        .setup-section {
+            margin-bottom: 25px;
+        }
+
+        .setup-section h3 {
+            font-size: 16px;
+            margin-bottom: 10px;
+            color: #4a9eff;
+        }
+
+        .setup-section p {
+            font-size: 14px;
+            color: #b0b0b0;
+            line-height: 1.6;
+            margin-bottom: 10px;
+        }
+
+        .setup-section code {
+            background: #1a1a1a;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Consolas', 'Monaco', monospace;
+            font-size: 13px;
+        }
+
+        .form-group {
+            margin-bottom: 15px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 13px;
+            color: #b0b0b0;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            background: #3a3a3a;
+            border: 1px solid #4a4a4a;
+            color: #e0e0e0;
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 14px;
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a9eff;
+        }
+
+        .machine-list {
+            margin-top: 15px;
+        }
+
+        .machine-list-item {
+            background: #3a3a3a;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 8px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .machine-list-item-info {
+            flex: 1;
+        }
+
+        .machine-list-item-name {
+            font-weight: 600;
+            margin-bottom: 3px;
+        }
+
+        .machine-list-item-url {
+            font-size: 12px;
+            color: #888;
+            font-family: 'Consolas', 'Monaco', monospace;
+        }
+
+        .btn-small {
+            padding: 5px 10px;
+            font-size: 12px;
+        }
+
+        .btn-danger {
+            background: #ff4a4a;
+        }
+
+        .btn-danger:hover {
+            background: #ff5a5a;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #2d2d2d;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #4a4a4a;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #5a5a5a;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .loading-message {
+            text-align: center;
+            padding: 40px;
+            color: #888;
+            font-size: 14px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <div class="header">
+        <div class="header-left">
+            <div class="header-title">Remote Claude CLI Chat</div>
+            <div class="version">v1.0</div>
+        </div>
+        <div class="header-buttons">
+            <button class="btn" id="refreshBtn">⟳ Refresh Sessions</button>
+            <button class="btn" id="settingsBtn">⚙ Settings</button>
+        </div>
+    </div>
+
+    <!-- Machine Selector Bar -->
+    <div class="machine-bar" id="machineBar">
+        <!-- Machine buttons will be added dynamically -->
+    </div>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <div class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <button class="new-session-btn" id="newSessionBtn">+ New Session</button>
+                <input type="text" class="search-box" id="searchBox" placeholder="Search sessions...">
+            </div>
+            <div class="sessions-list" id="sessionsList">
+                <div class="loading-message">Connect to a machine to view sessions</div>
+            </div>
+        </div>
+
+        <!-- Chat Container -->
+        <div class="chat-container">
+            <div class="session-info-bar" id="sessionInfoBar">
+                <span><strong>Project:</strong> <span id="currentProject">None</span></span>
+                <span><strong>Directory:</strong> <span id="currentDirectory">None</span></span>
+                <span><strong>Session:</strong> <span id="currentSessionId">None</span></span>
+            </div>
+            <div class="messages-area" id="messagesArea">
+                <div class="message system">
+                    <div class="message-bubble">
+                        Welcome to Remote Claude CLI Chat. Connect to a machine or add one in Settings.
+                    </div>
+                </div>
+            </div>
+            <div class="input-area">
+                <div class="input-controls">
+                    <select id="projectSelect">
+                        <option value="">Select Project (Optional)</option>
+                    </select>
+                    <input type="text" id="directoryInput" placeholder="Working Directory (Optional)">
+                </div>
+                <div class="file-upload-area">
+                    <label class="file-input-label" for="fileInput">📎 Attach Files</label>
+                    <input type="file" id="fileInput" class="file-input" multiple>
+                    <div class="attached-files" id="attachedFiles"></div>
+                </div>
+                <div class="input-row">
+                    <textarea class="message-input" id="messageInput" placeholder="Type your message here... (Enter to send, Shift+Enter for new line)"></textarea>
+                    <button class="send-btn" id="sendBtn">Send</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Setup Panel Overlay -->
+    <div class="setup-overlay hidden" id="setupOverlay">
+        <div class="setup-panel">
+            <div class="setup-header">Setup Remote Claude CLI</div>
+
+            <div class="setup-section">
+                <h3>1. Download Bridge Server</h3>
+                <p>Download the Python bridge server script and run it on each machine you want to connect to:</p>
+                <button class="btn btn-primary" id="downloadServerBtn">Download claude-bridge-server.py</button>
+            </div>
+
+            <div class="setup-section">
+                <h3>2. Install Dependencies</h3>
+                <p>On each remote machine, install required Python packages:</p>
+                <code>pip install anthropic aiofiles websockets</code>
+            </div>
+
+            <div class="setup-section">
+                <h3>3. Run Bridge Server</h3>
+                <p>Start the server on each machine:</p>
+                <code>python3 claude-bridge-server.py --machine-name "My Machine"</code>
+                <p style="margin-top: 10px;">Set your Anthropic API key:</p>
+                <code>export ANTHROPIC_API_KEY="your-key-here"</code>
+            </div>
+
+            <div class="setup-section">
+                <h3>4. Add Machine</h3>
+                <form id="addMachineForm">
+                    <div class="form-group">
+                        <label>Machine Name</label>
+                        <input type="text" id="machineNameInput" required placeholder="e.g., Work Laptop">
+                    </div>
+                    <div class="form-group">
+                        <label>WebSocket URL</label>
+                        <input type="text" id="machineUrlInput" required placeholder="ws://192.168.1.100:8765">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Add Machine</button>
+                </form>
+
+                <div class="machine-list" id="machineListSetup">
+                    <!-- Machines will be listed here -->
+                </div>
+            </div>
+
+            <div style="margin-top: 20px;">
+                <button class="btn" id="closeSetupBtn">Close</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Application State
+        const state = {
+            machines: [],
+            activeMachine: null,
+            websocket: null,
+            sessions: { projects: {}, ungrouped: [] },
+            activeSessionId: null,
+            currentConversation: [],
+            projects: [],
+            isTyping: false,
+            attachedFiles: [],
+            serverConfig: null,
+            settings: {}
+        };
+
+        // Initialize app
+        function init() {
+            // Event listeners
+            document.getElementById('settingsBtn').addEventListener('click', showSetup);
+            document.getElementById('closeSetupBtn').addEventListener('click', hideSetup);
+            document.getElementById('downloadServerBtn').addEventListener('click', downloadServerScript);
+            document.getElementById('addMachineForm').addEventListener('submit', handleAddMachine);
+            document.getElementById('sendBtn').addEventListener('click', sendMessage);
+            document.getElementById('messageInput').addEventListener('keydown', handleMessageInputKeydown);
+            document.getElementById('refreshBtn').addEventListener('click', refreshSessions);
+            document.getElementById('newSessionBtn').addEventListener('click', startNewSession);
+            document.getElementById('searchBox').addEventListener('input', handleSearch);
+            document.getElementById('fileInput').addEventListener('change', handleFileSelect);
+
+            // Auto-connect to default machine
+            autoConnectToDefaultMachine();
+        }
+
+        // Server-side configuration management
+        async function loadConfigFromServer() {
+            if (!state.websocket || state.websocket.readyState !== WebSocket.OPEN) {
+                return;
+            }
+
+            sendWebSocketMessage({ type: 'get_config' });
+        }
+
+        async function saveConfigToServer() {
+            if (!state.websocket || state.websocket.readyState !== WebSocket.OPEN) {
+                console.warn('Cannot save config - not connected');
+                return;
+            }
+
+            const config = {
+                version: "1.0",
+                machines: state.machines,
+                settings: state.settings,
+                last_active_machine: state.activeMachine?.name,
+                last_active_session: state.activeSessionId
+            };
+
+            console.log('Saving config to server:', config);
+            sendWebSocketMessage({
+                type: 'save_config',
+                config: config
+            });
+        }
+
+        function handleConfigLoaded(configData) {
+            state.serverConfig = configData;
+            state.machines = configData.machines || [];
+            state.settings = configData.settings || {};
+
+            renderMachineBar();
+            renderMachineListSetup();
+
+            // Auto-connect to last active or default machine
+            if (configData.last_active_machine) {
+                const machine = state.machines.find(m => m.name === configData.last_active_machine);
+                if (machine && !state.websocket) {
+                    connectToMachine(machine);
+                }
+            }
+        }
+
+        function autoConnectToDefaultMachine() {
+            // Connect to bridge server on same host after a short delay
+            setTimeout(() => {
+                // Dynamically determine WebSocket URL based on current page location
+                const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+                const host = window.location.hostname;
+                const wsUrl = `${protocol}//${host}:8765`;
+
+                const defaultMachine = {
+                    name: "Local Server",
+                    url: wsUrl,
+                    description: "Main server"
+                };
+
+                // Store in machines array if not already there
+                if (!state.machines.find(m => m.url === defaultMachine.url)) {
+                    state.machines.push(defaultMachine);
+                }
+
+                connectToMachine(defaultMachine);
+            }, 500);
+        }
+
+        // Machine management
+        function handleAddMachine(e) {
+            e.preventDefault();
+            const name = document.getElementById('machineNameInput').value.trim();
+            const url = document.getElementById('machineUrlInput').value.trim();
+
+            if (name && url) {
+                state.machines.push({ name, url, online: false });
+                saveConfigToServer();
+                renderMachineBar();
+                renderMachineListSetup();
+
+                // Clear form
+                document.getElementById('machineNameInput').value = '';
+                document.getElementById('machineUrlInput').value = '';
+
+                // Connect to new machine
+                const newMachine = state.machines[state.machines.length - 1];
+                connectToMachine(newMachine);
+            }
+        }
+
+        function removeMachine(index) {
+            if (confirm(`Remove machine "${state.machines[index].name}"?`)) {
+                const wasActive = state.activeMachine === state.machines[index];
+                if (wasActive) {
+                    disconnectFromMachine();
+                }
+                state.machines.splice(index, 1);
+                saveConfigToServer();
+                renderMachineBar();
+                renderMachineListSetup();
+            }
+        }
+
+        function renderMachineBar() {
+            const bar = document.getElementById('machineBar');
+            bar.innerHTML = '';
+
+            state.machines.forEach((machine, index) => {
+                const btn = document.createElement('button');
+                btn.className = 'machine-btn';
+                if (state.activeMachine === index) {
+                    btn.classList.add('active');
+                }
+
+                const dot = document.createElement('div');
+                dot.className = 'status-dot';
+                if (machine.online) {
+                    dot.classList.add('online');
+                }
+
+                btn.appendChild(dot);
+                btn.appendChild(document.createTextNode(machine.name));
+                btn.addEventListener('click', () => connectToMachine(index));
+
+                bar.appendChild(btn);
+            });
+        }
+
+        function renderMachineListSetup() {
+            const list = document.getElementById('machineListSetup');
+            list.innerHTML = '';
+
+            if (state.machines.length === 0) {
+                list.innerHTML = '<p style="color: #888; font-size: 13px; margin-top: 10px;">No machines added yet</p>';
+                return;
+            }
+
+            state.machines.forEach((machine, index) => {
+                const item = document.createElement('div');
+                item.className = 'machine-list-item';
+
+                const info = document.createElement('div');
+                info.className = 'machine-list-item-info';
+
+                const name = document.createElement('div');
+                name.className = 'machine-list-item-name';
+                name.textContent = machine.name;
+
+                const url = document.createElement('div');
+                url.className = 'machine-list-item-url';
+                url.textContent = machine.url;
+
+                info.appendChild(name);
+                info.appendChild(url);
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.className = 'btn btn-small btn-danger';
+                deleteBtn.textContent = 'Remove';
+                deleteBtn.addEventListener('click', () => removeMachine(index));
+
+                item.appendChild(info);
+                item.appendChild(deleteBtn);
+                list.appendChild(item);
+            });
+        }
+
+        // WebSocket connection
+        function connectToMachine(machineOrIndex) {
+            // Handle both machine object and index
+            let machine;
+            if (typeof machineOrIndex === 'object') {
+                machine = machineOrIndex;
+                // Update state.machines if not already there
+                if (!state.machines.find(m => m.url === machine.url)) {
+                    state.machines.push(machine);
+                }
+            } else {
+                machine = state.machines[machineOrIndex];
+            }
+
+            if (state.activeMachine === machine && state.websocket) {
+                return; // Already connected
+            }
+
+            // Disconnect from current machine
+            disconnectFromMachine();
+
+            state.activeMachine = machine;
+
+            console.log(`Connecting to ${machine.name} at ${machine.url}`);
+
+            try {
+                state.websocket = new WebSocket(machine.url);
+
+                state.websocket.onopen = () => {
+                    console.log('WebSocket connected');
+                    machine.online = true;
+                    renderMachineBar();
+                    addSystemMessage(`Connected to ${machine.name}`);
+                };
+
+                state.websocket.onmessage = (event) => {
+                    handleWebSocketMessage(JSON.parse(event.data));
+                };
+
+                state.websocket.onerror = (error) => {
+                    console.error('WebSocket error:', error);
+                    machine.online = false;
+                    renderMachineBar();
+                    addSystemMessage(`Error connecting to ${machine.name}`, 'error');
+                };
+
+                state.websocket.onclose = () => {
+                    console.log('WebSocket closed');
+                    machine.online = false;
+                    renderMachineBar();
+                    addSystemMessage(`Disconnected from ${machine.name}`);
+                };
+            } catch (error) {
+                console.error('Failed to connect:', error);
+                machine.online = false;
+                renderMachineBar();
+                addSystemMessage(`Failed to connect to ${machine.name}`, 'error');
+            }
+        }
+
+        function disconnectFromMachine() {
+            if (state.websocket) {
+                state.websocket.close();
+                state.websocket = null;
+            }
+            state.activeMachine = null;
+        }
+
+        function handleWebSocketMessage(data) {
+            console.log('Received:', data.type, data);
+
+            switch (data.type) {
+                case 'connected':
+                    addSystemMessage(`Connected to ${data.machine}`);
+                    // Load config from server
+                    loadConfigFromServer();
+                    // Auto-discover sessions
+                    sendWebSocketMessage({ type: 'discover_sessions' });
+                    // Get projects
+                    sendWebSocketMessage({ type: 'get_projects' });
+                    break;
+
+                case 'config':
+                    handleConfigLoaded(data.data);
+                    break;
+
+                case 'config_saved':
+                    console.log('Configuration saved to server');
+                    break;
+
+                case 'sessions':
+                    state.sessions = data.data;
+                    renderSessionsList();
+                    break;
+
+                case 'session_loaded':
+                    loadSessionIntoUI(data.session_id, data.history);
+                    break;
+
+                case 'projects':
+                    state.projects = data.data;
+                    renderProjectSelect();
+                    break;
+
+                case 'response':
+                    removeTypingIndicator();
+                    addAssistantMessage(data.message);
+                    // Display tool uses if any
+                    if (data.tool_uses && data.tool_uses.length > 0) {
+                        data.tool_uses.forEach(tool => {
+                            addToolUseDisplay(tool.name, tool.input);
+                        });
+                    }
+                    state.isTyping = false;
+                    break;
+
+                case 'response_chunk':
+                    if (!state.isTyping) {
+                        addTypingIndicator();
+                        state.isTyping = true;
+                    }
+                    // Update last message with streaming content
+                    updateLastMessage(data.content);
+                    break;
+
+                case 'tool_use':
+                    addToolUseDisplay(data.tool_name, data.tool_input);
+                    break;
+
+                case 'file_uploaded':
+                    addSystemMessage(`File uploaded: ${data.filename} (${data.size} bytes)`);
+                    break;
+
+                case 'session_update':
+                    // Real-time session updates from file watching
+                    if (data.session_id === state.activeSessionId && data.new_messages) {
+                        data.new_messages.forEach(msg => {
+                            const content = extractMessageContent(msg.message);
+                            if (msg.type === 'user') {
+                                addUserMessage(content);
+                            } else if (msg.type === 'assistant') {
+                                addAssistantMessage(content);
+                            }
+                        });
+                        addSystemMessage('Session updated (live sync)', 'info');
+                    }
+                    break;
+
+                case 'error':
+                    removeTypingIndicator();
+                    addSystemMessage(`Error: ${data.message}`, 'error');
+                    state.isTyping = false;
+                    break;
+            }
+        }
+
+        function sendWebSocketMessage(data) {
+            if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
+                state.websocket.send(JSON.stringify(data));
+            } else {
+                addSystemMessage('Not connected to any machine', 'error');
+            }
+        }
+
+        // Session management
+        function refreshSessions() {
+            if (!state.websocket) {
+                addSystemMessage('Not connected to any machine', 'error');
+                return;
+            }
+            sendWebSocketMessage({ type: 'discover_sessions' });
+            addSystemMessage('Refreshing sessions...');
+        }
+
+        function renderSessionsList() {
+            const container = document.getElementById('sessionsList');
+            container.innerHTML = '';
+
+            // Collect all sessions with their metadata
+            const allSessions = [];
+            const projects = state.sessions.projects || {};
+
+            for (const [projectName, projectData] of Object.entries(projects)) {
+                const directories = projectData.directories || {};
+                for (const [dirPath, sessions] of Object.entries(directories)) {
+                    sessions.forEach(session => {
+                        allSessions.push({
+                            ...session,
+                            projectName,
+                            dirPath
+                        });
+                    });
+                }
+            }
+
+            // Add ungrouped sessions
+            const ungrouped = state.sessions.ungrouped || [];
+            ungrouped.forEach(session => {
+                allSessions.push({
+                    ...session,
+                    projectName: null,
+                    dirPath: session.directory
+                });
+            });
+
+            // Sort by last_modified and get top 10
+            allSessions.sort((a, b) => {
+                return new Date(b.last_modified) - new Date(a.last_modified);
+            });
+            const recentSessions = allSessions.slice(0, 10);
+
+            // Render recent sessions section if there are any
+            if (recentSessions.length > 0) {
+                const recentSection = createRecentSessionsSection(recentSessions);
+                container.appendChild(recentSection);
+            }
+
+            // Render projects
+            for (const [projectName, projectData] of Object.entries(projects)) {
+                const projectSection = createProjectSection(projectName, projectData);
+                container.appendChild(projectSection);
+            }
+
+            // Render ungrouped sessions
+            if (ungrouped.length > 0) {
+                const ungroupedSection = createUngroupedSection(ungrouped);
+                container.appendChild(ungroupedSection);
+            }
+
+            if (Object.keys(projects).length === 0 && ungrouped.length === 0) {
+                container.innerHTML = '<div class="loading-message">No sessions found</div>';
+            }
+        }
+
+        function createRecentSessionsSection(sessions) {
+            const section = document.createElement('div');
+            section.className = 'project-section recent-section';
+
+            const header = document.createElement('div');
+            header.className = 'project-header';
+            header.innerHTML = `<span class="expand-icon">▼</span> ⭐ Recent Chats`;
+            header.style.fontWeight = 'bold';
+            header.style.color = '#4dabf7';
+
+            const content = document.createElement('div');
+            content.className = 'directory-content';
+            content.style.marginLeft = '20px';
+
+            sessions.forEach(session => {
+                const item = createSessionItem(session, session.projectName, session.dirPath);
+                content.appendChild(item);
+            });
+
+            header.addEventListener('click', () => {
+                const isCollapsed = content.style.display === 'none';
+                content.style.display = isCollapsed ? 'block' : 'none';
+                header.querySelector('.expand-icon').textContent = isCollapsed ? '▼' : '▶';
+            });
+
+            section.appendChild(header);
+            section.appendChild(content);
+            return section;
+        }
+
+        function createProjectSection(projectName, projectData) {
+            const section = document.createElement('div');
+            section.className = 'project-section';
+
+            const header = document.createElement('div');
+            header.className = 'project-header';
+            header.innerHTML = `<span class="expand-icon">▼</span> 📁 ${projectName}`;
+
+            const content = document.createElement('div');
+            content.className = 'project-content';
+
+            // Render directories
+            const directories = projectData.directories || {};
+            for (const [dirPath, sessions] of Object.entries(directories)) {
+                const dirSection = createDirectorySection(dirPath, sessions, projectName);
+                content.appendChild(dirSection);
+            }
+
+            header.addEventListener('click', () => {
+                const isCollapsed = content.style.display === 'none';
+                content.style.display = isCollapsed ? 'block' : 'none';
+                header.querySelector('.expand-icon').textContent = isCollapsed ? '▼' : '▶';
+            });
+
+            section.appendChild(header);
+            section.appendChild(content);
+            return section;
+        }
+
+        function createDirectorySection(dirPath, sessions, projectName) {
+            const section = document.createElement('div');
+            section.className = 'directory-section';
+
+            const header = document.createElement('div');
+            header.className = 'directory-header';
+            header.innerHTML = `<span class="expand-icon">▼</span> ${dirPath || 'No directory'}`;
+
+            const content = document.createElement('div');
+            content.className = 'directory-content';
+
+            sessions.forEach(session => {
+                const item = createSessionItem(session, projectName, dirPath);
+                content.appendChild(item);
+            });
+
+            header.addEventListener('click', () => {
+                const isCollapsed = content.style.display === 'none';
+                content.style.display = isCollapsed ? 'block' : 'none';
+                header.querySelector('.expand-icon').textContent = isCollapsed ? '▼' : '▶';
+            });
+
+            section.appendChild(header);
+            section.appendChild(content);
+            return section;
+        }
+
+        function createUngroupedSection(sessions) {
+            const section = document.createElement('div');
+            section.className = 'project-section';
+
+            const header = document.createElement('div');
+            header.className = 'project-header';
+            header.innerHTML = `<span class="expand-icon">▼</span> 📄 Ungrouped Sessions`;
+
+            const content = document.createElement('div');
+            content.className = 'directory-content';
+            content.style.marginLeft = '20px';
+
+            sessions.forEach(session => {
+                const item = createSessionItem(session, null, session.directory);
+                content.appendChild(item);
+            });
+
+            header.addEventListener('click', () => {
+                const isCollapsed = content.style.display === 'none';
+                content.style.display = isCollapsed ? 'block' : 'none';
+                header.querySelector('.expand-icon').textContent = isCollapsed ? '▼' : '▶';
+            });
+
+            section.appendChild(header);
+            section.appendChild(content);
+            return section;
+        }
+
+        function createSessionItem(session, projectName, dirPath) {
+            const item = document.createElement('div');
+            item.className = 'session-item';
+            if (state.activeSessionId === session.session_id) {
+                item.classList.add('active');
+            }
+
+            const preview = document.createElement('div');
+            preview.className = 'session-preview';
+            preview.textContent = session.preview || 'No preview';
+
+            const meta = document.createElement('div');
+            meta.className = 'session-meta';
+            meta.innerHTML = `
+                <span>${formatRelativeTime(session.last_modified)}</span>
+                <span>${session.message_count || 0} messages</span>
+            `;
+
+            item.appendChild(preview);
+            item.appendChild(meta);
+
+            item.addEventListener('click', () => {
+                loadSession(session.session_id, projectName, dirPath);
+            });
+
+            return item;
+        }
+
+        function loadSession(sessionId, projectName, dirPath) {
+            state.activeSessionId = sessionId;
+            sendWebSocketMessage({ type: 'load_session', session_id: sessionId });
+            updateSessionInfo(projectName, dirPath, sessionId);
+            renderSessionsList(); // Re-render to update active state
+        }
+
+        function loadSessionIntoUI(sessionId, history) {
+            // Clear messages area
+            const messagesArea = document.getElementById('messagesArea');
+            messagesArea.innerHTML = '';
+
+            // Add all messages from history
+            history.forEach(item => {
+                if (item.type === 'user') {
+                    const content = extractMessageContent(item.message);
+                    addUserMessage(content, false);
+                } else if (item.type === 'assistant') {
+                    const content = extractMessageContent(item.message);
+                    addAssistantMessage(content, false);
+                }
+            });
+
+            addSystemMessage(`Loaded session with ${history.length} messages`);
+            scrollToBottom();
+        }
+
+        function extractMessageContent(message) {
+            if (typeof message.content === 'string') {
+                return message.content;
+            } else if (Array.isArray(message.content)) {
+                // Handle multi-part content
+                return message.content
+                    .filter(item => item.type === 'text')
+                    .map(item => item.text)
+                    .join('\n');
+            }
+            return '';
+        }
+
+        function startNewSession() {
+            state.activeSessionId = null;
+            state.currentConversation = [];
+            document.getElementById('messagesArea').innerHTML = '';
+            updateSessionInfo(null, null, null);
+            addSystemMessage('Started new session');
+        }
+
+        function updateSessionInfo(project, directory, sessionId) {
+            document.getElementById('currentProject').textContent = project || 'None';
+            document.getElementById('currentDirectory').textContent = directory || 'None';
+            document.getElementById('currentSessionId').textContent = sessionId || 'None';
+        }
+
+        function renderProjectSelect() {
+            const select = document.getElementById('projectSelect');
+            select.innerHTML = '<option value="">Select Project (Optional)</option>';
+
+            state.projects.forEach(project => {
+                const option = document.createElement('option');
+                option.value = project;
+                option.textContent = project;
+                select.appendChild(option);
+            });
+        }
+
+        // Message handling
+        function sendMessage() {
+            const input = document.getElementById('messageInput');
+            const message = input.value.trim();
+
+            if (!message) return;
+            if (!state.websocket || state.websocket.readyState !== WebSocket.OPEN) {
+                addSystemMessage('Not connected to any machine', 'error');
+                return;
+            }
+
+            // Add user message to UI
+            addUserMessage(message);
+
+            // Show attached files in UI
+            if (state.attachedFiles.length > 0) {
+                state.attachedFiles.forEach(file => {
+                    addSystemMessage(`Attached: ${file.filename}`);
+                });
+            }
+
+            // Prepare message data
+            const data = {
+                type: 'chat',
+                message: message,
+                session_id: state.activeSessionId,
+                project: document.getElementById('projectSelect').value || null,
+                directory: document.getElementById('directoryInput').value || null,
+                files: state.attachedFiles
+            };
+
+            // Send to server
+            sendWebSocketMessage(data);
+
+            // Clear input and files
+            input.value = '';
+            state.attachedFiles = [];
+            renderAttachedFiles();
+
+            // Disable send button briefly
+            const sendBtn = document.getElementById('sendBtn');
+            sendBtn.disabled = true;
+            setTimeout(() => sendBtn.disabled = false, 1000);
+
+            // Add typing indicator
+            addTypingIndicator();
+        }
+
+        function handleMessageInputKeydown(e) {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        }
+
+        function addUserMessage(content, scroll = true) {
+            const messagesArea = document.getElementById('messagesArea');
+
+            const message = document.createElement('div');
+            message.className = 'message user';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = content;
+
+            message.appendChild(bubble);
+            messagesArea.appendChild(message);
+
+            if (scroll) scrollToBottom();
+        }
+
+        function addAssistantMessage(content, scroll = true) {
+            const messagesArea = document.getElementById('messagesArea');
+
+            const message = document.createElement('div');
+            message.className = 'message assistant';
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = content;
+
+            message.appendChild(bubble);
+            messagesArea.appendChild(message);
+
+            if (scroll) scrollToBottom();
+        }
+
+        function addSystemMessage(content, type = 'system') {
+            const messagesArea = document.getElementById('messagesArea');
+
+            const message = document.createElement('div');
+            message.className = `message ${type}`;
+
+            const bubble = document.createElement('div');
+            bubble.className = 'message-bubble';
+            bubble.textContent = content;
+
+            message.appendChild(bubble);
+            messagesArea.appendChild(message);
+
+            scrollToBottom();
+        }
+
+        function addTypingIndicator() {
+            const messagesArea = document.getElementById('messagesArea');
+
+            const indicator = document.createElement('div');
+            indicator.className = 'message assistant';
+            indicator.id = 'typingIndicator';
+
+            const typing = document.createElement('div');
+            typing.className = 'typing-indicator';
+            typing.innerHTML = '<div class="typing-dot"></div><div class="typing-dot"></div><div class="typing-dot"></div>';
+
+            indicator.appendChild(typing);
+            messagesArea.appendChild(indicator);
+
+            scrollToBottom();
+        }
+
+        function removeTypingIndicator() {
+            const indicator = document.getElementById('typingIndicator');
+            if (indicator) {
+                indicator.remove();
+            }
+        }
+
+        function updateLastMessage(content) {
+            // For streaming, we'll add to the typing indicator or create assistant message
+            removeTypingIndicator();
+
+            const messagesArea = document.getElementById('messagesArea');
+            const lastMessage = messagesArea.querySelector('.message.assistant:last-child');
+
+            if (lastMessage && !lastMessage.id) {
+                // Append to existing message
+                const bubble = lastMessage.querySelector('.message-bubble');
+                bubble.textContent += content;
+            } else {
+                // Create new message
+                addAssistantMessage(content);
+            }
+
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const messagesArea = document.getElementById('messagesArea');
+            messagesArea.scrollTop = messagesArea.scrollHeight;
+        }
+
+        function addToolUseDisplay(toolName, toolInput) {
+            const messagesArea = document.getElementById('messagesArea');
+
+            const toolMessage = document.createElement('div');
+            toolMessage.className = 'tool-use-message';
+
+            const header = document.createElement('div');
+            header.className = 'tool-use-header';
+            header.textContent = `🔧 Tool: ${toolName}`;
+
+            const content = document.createElement('div');
+            content.className = 'tool-use-content';
+
+            // Format tool input nicely
+            if (typeof toolInput === 'object') {
+                const formatted = JSON.stringify(toolInput, null, 2);
+                const codeBlock = document.createElement('div');
+                codeBlock.className = 'code-block';
+                codeBlock.textContent = formatted;
+                content.appendChild(codeBlock);
+            } else {
+                content.textContent = String(toolInput);
+            }
+
+            toolMessage.appendChild(header);
+            toolMessage.appendChild(content);
+            messagesArea.appendChild(toolMessage);
+
+            scrollToBottom();
+        }
+
+        // File upload functions
+        async function handleFileSelect(e) {
+            const files = e.target.files;
+            if (!files || files.length === 0) return;
+
+            for (const file of files) {
+                try {
+                    const content = await readFileAsText(file);
+                    state.attachedFiles.push({
+                        filename: file.name,
+                        content: content,
+                        size: file.size,
+                        type: file.type
+                    });
+                } catch (error) {
+                    addSystemMessage(`Error reading file ${file.name}: ${error.message}`, 'error');
+                }
+            }
+
+            renderAttachedFiles();
+            // Clear file input
+            e.target.value = '';
+        }
+
+        function readFileAsText(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = (e) => resolve(e.target.result);
+                reader.onerror = (e) => reject(new Error('Failed to read file'));
+                reader.readAsText(file);
+            });
+        }
+
+        function renderAttachedFiles() {
+            const container = document.getElementById('attachedFiles');
+            container.innerHTML = '';
+
+            state.attachedFiles.forEach((file, index) => {
+                const chip = document.createElement('div');
+                chip.className = 'attached-file-chip';
+
+                const filename = document.createElement('span');
+                filename.textContent = file.filename;
+
+                const removeBtn = document.createElement('span');
+                removeBtn.className = 'remove-file';
+                removeBtn.textContent = '×';
+                removeBtn.addEventListener('click', () => removeAttachedFile(index));
+
+                chip.appendChild(filename);
+                chip.appendChild(removeBtn);
+                container.appendChild(chip);
+            });
+        }
+
+        function removeAttachedFile(index) {
+            state.attachedFiles.splice(index, 1);
+            renderAttachedFiles();
+        }
+
+        // Search functionality
+        function handleSearch(e) {
+            const query = e.target.value.toLowerCase();
+            const sessionItems = document.querySelectorAll('.session-item');
+
+            sessionItems.forEach(item => {
+                const preview = item.querySelector('.session-preview').textContent.toLowerCase();
+                if (preview.includes(query)) {
+                    item.style.display = 'block';
+                } else {
+                    item.style.display = 'none';
+                }
+            });
+        }
+
+        // Setup panel
+        function showSetup() {
+            document.getElementById('setupOverlay').classList.remove('hidden');
+        }
+
+        function hideSetup() {
+            document.getElementById('setupOverlay').classList.add('hidden');
+        }
+
+        function downloadServerScript() {
+            // Read the server script from the file we created
+            // For now, we'll embed a reference - in production, this would fetch the actual file
+            const scriptContent = `# Download the server script from your repository
+# or copy it from the bridge server you created`;
+
+            const blob = new Blob([scriptContent], { type: 'text/x-python' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'claude-bridge-server.py';
+            a.click();
+            URL.revokeObjectURL(url);
+
+            addSystemMessage('Note: Download the actual claude-bridge-server.py from your project directory');
+        }
+
+        // Utility functions
+        function formatRelativeTime(timestamp) {
+            if (!timestamp) return 'Unknown';
+
+            const date = new Date(timestamp);
+            const now = new Date();
+            const diffMs = now - date;
+            const diffSecs = Math.floor(diffMs / 1000);
+            const diffMins = Math.floor(diffSecs / 60);
+            const diffHours = Math.floor(diffMins / 60);
+            const diffDays = Math.floor(diffHours / 24);
+
+            if (diffSecs < 60) return 'just now';
+            if (diffMins < 60) return `${diffMins} min ago`;
+            if (diffHours < 24) return `${diffHours} hours ago`;
+            if (diffDays < 7) return `${diffDays} days ago`;
+            return date.toLocaleDateString();
+        }
+
+        // Initialize on load
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>
