@@ -1,5 +1,30 @@
 # Claude CLI Cloud - Changelog
 
+## Version 2.13.0 - 2025-11-09
+
+### New Features
+- **Git Push History Viewer**: Added "📜 History" button to view push logs
+  - Shows last 50 git push attempts with timestamps
+  - Displays commit messages and success/failure status
+  - Includes full git output for debugging
+  - Color-coded status indicators (green for success, red for failure)
+  - Automatically saves history for each push
+
+### Enhancements
+- **GitHub Token Storage**: Projects can now store GitHub Personal Access Tokens
+  - Added GitHub Token field to project create/edit modals
+  - Tokens are automatically used for authentication during git push
+  - Secure password field input for tokens
+  - Per-project token configuration
+
+### Technical Details
+- Added `push_history` array to project data structure
+- Push history limited to last 50 entries per project
+- History includes: timestamp, success status, commit message, git output
+- Bridge server now returns commit_message in git_push_result
+
+---
+
 ## Version 2.12.0 - 2025-11-09
 
 ### New Features

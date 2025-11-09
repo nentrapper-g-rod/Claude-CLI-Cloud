@@ -6166,8 +6166,8 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Version constants
-        const WEB_APP_VERSION = '2.12.4';  // Web interface version - Rename Local CLI to actual server names
-        const BRIDGE_VERSION = '2.12.0';    // Bridge server version - Simple git push integration
+        const WEB_APP_VERSION = '2.13.0';  // Web interface version - Git push history viewer
+        const BRIDGE_VERSION = '2.13.0';    // Bridge server version - Git push history tracking
 
         // Update metrics display
         function updateMetricsDisplay(metrics, serverName) {
@@ -6346,9 +6346,12 @@ Always add or update the version number on the dashboards or index or scripts wi
                     const totalSessions = Object.values(directories).reduce((sum, sessions) => sum + sessions.length, 0);
                     connHeader.innerHTML = `🖥️ ${connName} <span style="color: #888; font-size: 12px;">(${totalSessions} sessions)</span>`;
 
-                    // Make collapsible
-                    let isExpanded = true;
+                    // Make collapsible (collapsed by default)
+                    let isExpanded = false;
                     const directoriesContainer = document.createElement('div');
+                    directoriesContainer.style.display = 'none';
+
+                    connHeader.innerHTML = `🖥️ ▶ ${connName} <span style="color: #888; font-size: 12px;">(${totalSessions} sessions)</span>`;
 
                     connHeader.addEventListener('click', () => {
                         isExpanded = !isExpanded;

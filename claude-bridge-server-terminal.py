@@ -4,7 +4,7 @@ Remote Claude CLI Bridge Server (Terminal Mode)
 Purpose: WebSocket server that relays between web UI and actual Claude CLI process
 """
 
-VERSION = "2.12.0"  # Simple git push integration for version tracking
+VERSION = "2.13.0"  # Git push history tracking and viewer
 
 import asyncio
 import websockets
