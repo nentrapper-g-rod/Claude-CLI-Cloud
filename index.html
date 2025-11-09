@@ -6930,7 +6930,6 @@ Always add or update the version number on the dashboards or index or scripts wi
                 }
 
                 // Edit Docs button (if project has a directory)
-                const projectDirs = project.directories || (project.working_directory ? [project.working_directory] : []);
                 if (projectDirs.length > 0) {
                     headerHTML += `
                         <button onclick="openProjectDocsEditor('${project.id}'); event.stopPropagation();"
