@@ -1,5 +1,22 @@
 # Claude CLI Cloud - Changelog
 
+## Version 2.12.0 - 2025-11-09
+
+### New Features
+- **Simple Git Push Integration**: Added "Push to Git" button to project cards
+  - Manual one-click push to commit and push all changes
+  - Auto-generated commit messages with timestamps (format: "Auto-save YYYY-MM-DD HH:MM:SS")
+  - Proper error handling and loading states
+  - Works with existing git repositories and credentials
+
+### Technical Details
+- Added `git_push_auto` WebSocket handler in bridge server
+- Button shows "⏳ Pushing..." during operation
+- Handles "nothing to commit" case gracefully
+- Validates WebSocket connection before attempting push
+
+---
+
 ## Version 2.11.13 - 2025-11-07
 
 ### Fixes
