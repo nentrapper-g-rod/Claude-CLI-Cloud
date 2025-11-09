@@ -2461,6 +2461,8 @@ class ClaudeBridgeTerminalServer:
         try:
             cwd = data.get('cwd')
             project_name = data.get('project_name', 'Unknown')
+            github_token = data.get('github_token', '')
+            repo_url = data.get('repo_url', '')
 
             if not cwd:
                 await self.send_error(websocket, "Missing project directory")
@@ -2472,12 +2474,26 @@ class ClaudeBridgeTerminalServer:
 
             print(f"[{datetime.now().isoformat()}] Git push for {project_name} at {cwd}")
 
+            # Setup commands
+            commands = []
+
+            # If GitHub token is provided, configure git remote with token
+            if github_token and repo_url:
+                # Extract owner/repo from URL (e.g., https://github.com/user/repo.git)
+                import re
+                match = re.search(r'github\.com[:/]([^/]+)/([^/\.]+)', repo_url)
+                if match:
+                    owner, repo = match.groups()
+                    # Set up authenticated remote URL
+                    auth_url = f"https://{github_token}@github.com/{owner}/{repo}.git"
+                    commands.append(f"cd {shlex.quote(cwd)} && git remote set-url origin {shlex.quote(auth_url)} 2>/dev/null || git remote add origin {shlex.quote(auth_url)}")
+
             # Execute git commands
-            commands = [
+            commands.extend([
                 f"cd {shlex.quote(cwd)} && git add -A",
                 f"cd {shlex.quote(cwd)} && git commit -m {shlex.quote(commit_msg)}",
                 f"cd {shlex.quote(cwd)} && git push"
-            ]
+            ])
 
             output_lines = []
             success = True

@@ -971,6 +971,13 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                     </div>
                 </div>
                 <div class="form-group">
+                    <label for="editProjectGithubTokenInput">GitHub Token (optional):</label>
+                    <input type="password" id="editProjectGithubTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
+                    <div style="margin-top: 4px; font-size: 11px; color: #888;">
+                        GitHub Personal Access Token for git push (get one at <a href="https://github.com/settings/tokens" target="_blank" style="color: #4a9eff;">github.com/settings/tokens</a>)
+                    </div>
+                </div>
+                <div class="form-group">
                     <label for="editProjectLinkInput">Project (optional):</label>
                     <input type="url" id="editProjectLinkInput" placeholder="e.g., https://github.com/users/username/projects/123" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
                     <div style="margin-top: 4px; font-size: 11px; color: #888;">
@@ -1027,6 +1034,13 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                     <input type="url" id="projectRepoInput" placeholder="e.g., https://github.com/user/repo" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
                     <div style="margin-top: 4px; font-size: 11px; color: #888;">
                         Add a link to the repository
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="projectGithubTokenInput">GitHub Token (optional):</label>
+                    <input type="password" id="projectGithubTokenInput" placeholder="ghp_xxxxxxxxxxxxxxxxxxxx" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
+                    <div style="margin-top: 4px; font-size: 11px; color: #888;">
+                        GitHub Personal Access Token for git push (get one at <a href="https://github.com/settings/tokens" target="_blank" style="color: #4a9eff;">github.com/settings/tokens</a>)
                     </div>
                 </div>
                 <div class="form-group">
@@ -6997,6 +7011,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             const projectDirs = project.directories || (project.working_directory ? [project.working_directory] : []);
             document.getElementById('editProjectWorkingDirInput').value = projectDirs[0] || '';
             document.getElementById('editProjectRepoInput').value = project.repo || '';
+            document.getElementById('editProjectGithubTokenInput').value = project.github_token || '';
             document.getElementById('editProjectLinkInput').value = project.link || '';
             document.getElementById('editProjectColorInput').value = project.color || '#4a9eff';
 
@@ -7030,6 +7045,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             const workingDirectory = document.getElementById('editProjectWorkingDirInput').value.trim();
             const connectionIndex = document.getElementById('editProjectConnectionInput').value;
             const repo = document.getElementById('editProjectRepoInput').value.trim();
+            const githubToken = document.getElementById('editProjectGithubTokenInput').value.trim();
             const link = document.getElementById('editProjectLinkInput').value.trim();
             const color = document.getElementById('editProjectColorInput').value;
 
@@ -7062,6 +7078,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                         name,
                         description,
                         repo,
+                        github_token: githubToken,
                         link,
                         directories,
                         connection_index: connectionIndex !== '' ? parseInt(connectionIndex) : null,
@@ -7110,6 +7127,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             const workingDirectory = document.getElementById('projectWorkingDirInput').value.trim();
             const connectionIndex = document.getElementById('projectConnectionInput').value;
             const repo = document.getElementById('projectRepoInput').value.trim();
+            const githubToken = document.getElementById('projectGithubTokenInput').value.trim();
             const link = document.getElementById('projectLinkInput').value.trim();
             const color = document.getElementById('projectColorInput').value;
 
@@ -7128,6 +7146,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                         directories: workingDirectory ? [workingDirectory] : [],
                         connection_index: connectionIndex !== '' ? parseInt(connectionIndex) : null,
                         repo,
+                        github_token: githubToken,
                         link,
                         color
                     })
@@ -8603,7 +8622,9 @@ Always add or update the version number on the dashboards or index or scripts wi
                 connTab.websocket.send(JSON.stringify({
                     type: 'git_push_auto',
                     cwd: cwd,
-                    project_name: projectName || 'Unknown'
+                    project_name: projectName || 'Unknown',
+                    github_token: project.github_token || '',
+                    repo_url: project.repo || ''
                 }));
 
                 showStatus(`Pushing changes for ${projectName}...`, 'info');
