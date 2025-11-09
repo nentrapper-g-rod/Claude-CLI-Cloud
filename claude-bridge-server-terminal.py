@@ -2720,6 +2720,7 @@ class ClaudeBridgeTerminalServer:
                 'directories': data.get('directories', []),
                 'connection_index': data.get('connection_index'),
                 'repo': data.get('repo', ''),
+                'github_token': data.get('github_token', ''),
                 'link': data.get('link', ''),
                 'color': data.get('color', '#4a9eff'),
                 'sessions': []
@@ -2752,6 +2753,7 @@ class ClaudeBridgeTerminalServer:
                     project['directories'] = data.get('directories', project.get('directories', []))
                     project['connection_index'] = data.get('connection_index', project.get('connection_index'))
                     project['repo'] = data.get('repo', project.get('repo', ''))
+                    project['github_token'] = data.get('github_token', project.get('github_token', ''))
                     project['link'] = data.get('link', project.get('link', ''))
                     project['color'] = data.get('color', project.get('color', '#4a9eff'))
                     break
