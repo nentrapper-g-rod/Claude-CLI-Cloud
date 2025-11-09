@@ -24,13 +24,48 @@ def get_bridge_version():
 SERVED_FILES = {
     '/download/claude-bridge-server-terminal.py': 'claude-bridge-server-terminal.py',
     '/download/install-bridge.sh': 'install-bridge.sh',
+    '/download/conversation-mcp-server.py': 'conversation-mcp-server.py',
+    '/download/conversation_db.py': 'conversation_db.py',
+    '/download/conversation-hook.py': 'conversation-hook.py',
+    '/download/install-mcp-config.sh': 'install-mcp-config.sh',
+    '/download/check-remote-sync.sh': 'check-remote-sync.sh',
+    '/download/claude-with-connection-name.sh': 'claude-with-connection-name.sh',
     '/install': 'install-bridge.sh',  # Shortcut URL
 }
 
 class DeploymentHandler(BaseHTTPRequestHandler):
     def do_HEAD(self):
-        # Handle HEAD requests the same as GET but don't send body
-        self.do_GET()
+        # Handle HEAD requests - send headers only, no body
+        if self.path in SERVED_FILES:
+            filename = SERVED_FILES[self.path]
+            filepath = os.path.join(os.path.dirname(__file__), filename)
+
+            if os.path.exists(filepath):
+                self.send_response(200)
+
+                # Set content type
+                if filename.endswith('.py'):
+                    self.send_header('Content-Type', 'text/x-python')
+                elif filename.endswith('.sh'):
+                    self.send_header('Content-Type', 'text/x-shellscript')
+                else:
+                    self.send_header('Content-Type', 'application/octet-stream')
+
+                # Get file size for Content-Length
+                file_size = os.path.getsize(filepath)
+                self.send_header('Content-Length', str(file_size))
+                self.end_headers()
+                return
+            else:
+                self.send_error(404, f"File not found: {filename}")
+                return
+        elif self.path == '/' or self.path == '':
+            self.send_response(200)
+            self.send_header('Content-Type', 'text/html')
+            self.end_headers()
+            return
+        else:
+            self.send_error(404, "Not Found")
 
     def do_GET(self):
         # Check if requesting a served file
@@ -174,7 +209,7 @@ class DeploymentHandler(BaseHTTPRequestHandler):
         print(f"[{self.log_date_time_string()}] {format % args}")
 
 def main():
-    port = 8889
+    port = 8890
 
     # Check if files exist
     script_dir = os.path.dirname(os.path.abspath(__file__))

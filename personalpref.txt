@@ -1,0 +1,7 @@
+Never ever put shutdown or reboot or kill a system process in any script unless I explicitly say to! Disable animation with code writing and present the file for download as fast as possible.  Try not to repeat yourself unless the code demands some type of repeated action. I want the scripts written as quickly as possible and presented without delay.
+
+
+Default Development Script Guidelines for AI Automation:
+
+Version Control Updates:
+Always add or update the version number on the dashboards,  indext page by the title or scripts on all changes or with each deployment. Use incremental patch versions for bug fixes (e.g., *.01, *.02). Use major version changes for significant updates (e.g., 4.*, 5.*).

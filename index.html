@@ -3883,7 +3883,7 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             const displayDir = workDir !== 'unknown' ? workDir : '';
 
             // Get connection name if available
-            const connectionName = session.connection_name || 'Local CLI';
+            const connectionName = session.connection_name || 'Unknown';
 
             meta.innerHTML = `
                 <div style="display: flex; justify-content: space-between; margin-bottom: 2px;">
@@ -3893,7 +3893,7 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                 <div style="font-size: 10px; color: #666; font-family: monospace; overflow: hidden; text-overflow: ellipsis;">
                     ${session.session_id}
                 </div>
-                ${connectionName !== 'Local CLI' ? `<div style="font-size: 10px; color: #9e6aff; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🖥️ ${connectionName}</div>` : ''}
+                <div style="font-size: 10px; color: #9e6aff; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">🖥️ ${connectionName}</div>
                 ${displayDir ? `<div style="font-size: 10px; color: #888; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">📂 ${displayDir}</div>` : ''}
                 ${projectIndicator}
             `;
@@ -6109,7 +6109,7 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Version constants
-        const WEB_APP_VERSION = '2.12.1';  // Web interface version - Refresh button in history chat modal
+        const WEB_APP_VERSION = '2.12.4';  // Web interface version - Rename Local CLI to actual server names
         const BRIDGE_VERSION = '2.12.0';    // Bridge server version - Simple git push integration
 
         // Update metrics display
@@ -6589,7 +6589,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                             ${msg.content}
                         </div>
                         <div style="font-size: 10px; color: #888;">
-                            🖥️ ${msg.connection_name} · 📂 ${msg.cwd || 'N/A'} · ${new Date(msg.timestamp).toLocaleString()}
+                            🖥️ ${msg.connection_name || 'Unknown'} · 📂 ${msg.cwd || 'N/A'} · ${new Date(msg.timestamp).toLocaleString()}
                         </div>
                     `;
 

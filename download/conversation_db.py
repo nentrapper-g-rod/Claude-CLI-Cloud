@@ -185,28 +185,15 @@ class ConversationDB:
             ''', (session_id, connection_name, project, cwd))
             conversation_id = cursor.lastrowid
 
-        # Insert messages (skip duplicates based on message_id)
+        # Insert messages
         for msg in messages:
-            message_id = msg.get('message_id')
-
-            # Check if message already exists
-            if message_id:
-                cursor.execute('''
-                    SELECT id FROM messages
-                    WHERE session_id = ? AND message_id = ?
-                ''', (session_id, message_id))
-
-                if cursor.fetchone():
-                    # Message already exists, skip it
-                    continue
-
             cursor.execute('''
                 INSERT INTO messages (conversation_id, session_id, message_id, role, content, timestamp, metadata)
                 VALUES (?, ?, ?, ?, ?, ?, ?)
             ''', (
                 conversation_id,
                 session_id,
-                message_id,
+                msg.get('message_id'),
                 msg.get('role', 'unknown'),
                 msg.get('content', ''),
                 msg.get('timestamp', datetime.now().isoformat()),

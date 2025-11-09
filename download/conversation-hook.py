@@ -2,7 +2,6 @@
 """
 Claude CLI Hook for Conversation Logging
 Captures user prompts and assistant responses and saves to database
-Also sends to central server for aggregation
 """
 
 import json
@@ -10,33 +9,9 @@ import sys
 import os
 from pathlib import Path
 from datetime import datetime
-import urllib.request
-import urllib.error
 
 # Add the path to conversation_db module
 sys.path.insert(0, str(Path.home() / '.claude-bridge'))
-
-# Central server for conversation aggregation
-CENTRAL_SERVER = os.environ.get('CLAUDE_CENTRAL_SERVER', 'http://100.94.187.56:8891')
-
-def send_to_central_server(session_data):
-    """Send session data to central server for aggregation"""
-    try:
-        data = json.dumps(session_data).encode('utf-8')
-        req = urllib.request.Request(
-            f'{CENTRAL_SERVER}/api/conversations/sync',
-            data=data,
-            headers={'Content-Type': 'application/json'},
-            method='POST'
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return response.read()
-    except Exception as e:
-        # Log but don't fail - local DB is primary
-        debug_log = Path.home() / '.claude-bridge' / 'hook-debug.log'
-        with open(debug_log, 'a') as f:
-            f.write(f"[{datetime.now().isoformat()}] Failed to send to central server: {e}\n")
-        return None
 
 try:
     from conversation_db import get_db
@@ -59,20 +34,8 @@ try:
     # Use Claude CLI's actual session_id
     session_id = hook_data.get('session_id', f"claude-cli-{abs(hash(cwd)) % 1000000}")
 
-    # Get connection name from environment variable (set by bridge) or auto-detect from hostname
-    connection_name = os.environ.get('CLAUDE_CONNECTION_NAME')
-    if not connection_name:
-        # Not running through bridge - tag with hostname to differentiate servers
-        import socket
-        hostname = socket.gethostname()
-        # Map known hostnames to friendly names
-        hostname_map = {
-            'recycle': 'Recycle Server',
-            'steel': 'Steel Server',
-            'cm-webserver': 'CM Webserver',
-            'ip-172-26-13-164': 'CM Webserver'  # AWS instance hostname
-        }
-        connection_name = hostname_map.get(hostname.lower(), hostname)
+    # Get connection name from environment variable (set by bridge) or default to Local CLI
+    connection_name = os.environ.get('CLAUDE_CONNECTION_NAME', 'Local CLI')
 
     db = get_db()
 
@@ -84,15 +47,6 @@ try:
         cwd=cwd
     )
 
-    # Send session info to central server
-    send_to_central_server({
-        'session_id': session_id,
-        'connection_name': connection_name,
-        'project': project,
-        'cwd': cwd,
-        'event': event_name
-    })
-
     # Handle different event types
     if event_name == 'UserPromptSubmit':
         # Save user message
@@ -102,33 +56,22 @@ try:
             from datetime import timezone
             utc_timestamp = datetime.now(timezone.utc).isoformat()
 
-            message_data = [{
-                'role': 'user',
-                'content': prompt,
-                'timestamp': utc_timestamp,
-                'metadata': {
-                    'event': 'UserPromptSubmit',
-                    'project': project,
-                    'cwd': cwd
-                }
-            }]
-
             db.add_messages(
                 session_id=session_id,
                 connection_name=connection_name,
-                messages=message_data,
+                messages=[{
+                    'role': 'user',
+                    'content': prompt,
+                    'timestamp': utc_timestamp,
+                    'metadata': {
+                        'event': 'UserPromptSubmit',
+                        'project': project,
+                        'cwd': cwd
+                    }
+                }],
                 project=project,
                 cwd=cwd
             )
-
-            # Send to central server
-            send_to_central_server({
-                'session_id': session_id,
-                'connection_name': connection_name,
-                'messages': message_data,
-                'project': project,
-                'cwd': cwd
-            })
 
     elif event_name == 'Stop':
         # Claude finished responding - read the transcript to get the response
@@ -216,15 +159,6 @@ try:
                         )
                         with open(debug_log, 'a') as f:
                             f.write(f"Successfully saved {len(messages_to_save)} messages\n")
-
-                        # Send to central server
-                        send_to_central_server({
-                            'session_id': session_id,
-                            'connection_name': connection_name,
-                            'messages': messages_to_save,
-                            'project': project,
-                            'cwd': cwd
-                        })
             except Exception as e:
                 # Log error but continue
                 with open(debug_log, 'a') as f:
