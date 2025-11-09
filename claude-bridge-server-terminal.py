@@ -4,7 +4,7 @@ Remote Claude CLI Bridge Server (Terminal Mode)
 Purpose: WebSocket server that relays between web UI and actual Claude CLI process
 """
 
-VERSION = "2.13.0"  # Git push history tracking and viewer
+VERSION = "2.14.0"  # Import git history from git log
 
 import asyncio
 import websockets
@@ -821,6 +821,8 @@ class ClaudeBridgeTerminalServer:
             await self.handle_set_connection_name(websocket, data)
         elif msg_type == 'git_push_auto':
             await self.handle_git_push_auto(websocket, data)
+        elif msg_type == 'git_log_import':
+            await self.handle_git_log_import(websocket, data)
         else:
             await self.send_error(websocket, f"Unknown message type: {msg_type}")
 
@@ -2533,6 +2535,81 @@ class ClaudeBridgeTerminalServer:
 
         except Exception as e:
             error_msg = f"Git push failed: {e}"
+            print(f"[{datetime.now().isoformat()}] {error_msg}")
+            traceback.print_exc()
+            await self.send_error(websocket, error_msg)
+
+    async def handle_git_log_import(self, websocket, data: Dict):
+        """Import git commit history into push_history"""
+        try:
+            cwd = data.get('cwd')
+            limit = data.get('limit', 50)  # Number of commits to import
+
+            if not cwd:
+                await self.send_error(websocket, "Missing project directory")
+                return
+
+            print(f"[{datetime.now().isoformat()}] Importing git log from {cwd}")
+
+            # Get git log with custom format: timestamp|commit_message|files_changed
+            cmd = f"cd {shlex.quote(cwd)} && git log -n {limit} --pretty=format:'%aI|%s' --numstat"
+
+            proc = await asyncio.create_subprocess_shell(
+                cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, stderr = await proc.communicate()
+
+            if proc.returncode != 0:
+                error_msg = stderr.decode().strip() or "Failed to read git log"
+                await self.send_error(websocket, error_msg)
+                return
+
+            output = stdout.decode().strip()
+
+            # Parse git log into history entries
+            history_entries = []
+            lines = output.split('\n')
+            i = 0
+
+            while i < len(lines):
+                line = lines[i].strip()
+                if '|' in line:
+                    # This is a commit line
+                    parts = line.split('|', 1)
+                    if len(parts) == 2:
+                        timestamp, commit_msg = parts
+
+                        # Count files changed from numstat lines that follow
+                        files_changed = 0
+                        i += 1
+                        while i < len(lines) and lines[i].strip() and '|' not in lines[i]:
+                            files_changed += 1
+                            i += 1
+
+                        history_entries.append({
+                            'timestamp': timestamp,
+                            'success': True,  # Assume all committed changes were successful
+                            'commit_message': commit_msg,
+                            'files_changed': files_changed if files_changed > 0 else None,
+                            'output': f"Imported from git log\nCommit: {commit_msg}"
+                        })
+                        continue
+
+                i += 1
+
+            # Send the imported history back to client
+            await self.send_message(websocket, {
+                'type': 'git_log_imported',
+                'history': history_entries,
+                'count': len(history_entries)
+            })
+
+            print(f"[{datetime.now().isoformat()}] Imported {len(history_entries)} commits from git log")
+
+        except Exception as e:
+            error_msg = f"Git log import failed: {e}"
             print(f"[{datetime.now().isoformat()}] {error_msg}")
             traceback.print_exc()
             await self.send_error(websocket, error_msg)

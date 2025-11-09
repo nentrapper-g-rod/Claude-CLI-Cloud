@@ -1118,6 +1118,7 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                 <!-- Push history will be listed here -->
             </div>
             <div class="modal-buttons">
+                <button type="button" id="importGitLogBtn" onclick="importGitLog()" style="background: #3a6a9e; color: white;">📥 Import from Git Log</button>
                 <button type="button" onclick="hideGitPushHistoryModal()" style="background: #555; color: white;">Close</button>
             </div>
         </div>
@@ -6166,8 +6167,8 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Version constants
-        const WEB_APP_VERSION = '2.13.0';  // Web interface version - Git push history viewer
-        const BRIDGE_VERSION = '2.13.0';    // Bridge server version - Git push history tracking
+        const WEB_APP_VERSION = '2.14.0';  // Web interface version - Import git history from git log
+        const BRIDGE_VERSION = '2.14.0';    // Bridge server version - Import git history from git log
 
         // Update metrics display
         function updateMetricsDisplay(metrics, serverName) {
@@ -8746,10 +8747,99 @@ Always add or update the version number on the dashboards or index or scripts wi
             }
 
             document.getElementById('gitPushHistoryModal').style.display = 'block';
+
+            // Store current project ID for import function
+            window.currentHistoryProjectId = projectId;
         }
 
         function hideGitPushHistoryModal() {
             document.getElementById('gitPushHistoryModal').style.display = 'none';
+            window.currentHistoryProjectId = null;
+        }
+
+        async function importGitLog() {
+            const projectId = window.currentHistoryProjectId;
+            if (!projectId) {
+                showStatus('No project selected', 'error');
+                return;
+            }
+
+            const project = customProjects.find(p => p.id === projectId);
+            if (!project || !project.directories || project.directories.length === 0) {
+                showStatus('Project has no directory configured', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('importGitLogBtn');
+            const originalText = btn.textContent;
+            btn.textContent = '⏳ Importing...';
+            btn.disabled = true;
+
+            try {
+                // Request git log import from bridge server
+                const message = {
+                    type: 'git_log_import',
+                    cwd: project.directories[0],  // Use first directory
+                    limit: 50
+                };
+
+                // Send request
+                if (ws && ws.readyState === WebSocket.OPEN) {
+                    ws.send(JSON.stringify(message));
+
+                    // Wait for response
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => reject(new Error('Import timeout')), 30000);
+
+                        const handler = (event) => {
+                            const data = JSON.parse(event.data);
+                            if (data.type === 'git_log_imported') {
+                                clearTimeout(timeout);
+                                ws.removeEventListener('message', handler);
+
+                                // Initialize push_history if needed
+                                if (!project.push_history) {
+                                    project.push_history = [];
+                                }
+
+                                // Add imported entries (avoid duplicates by checking timestamps)
+                                const existingTimestamps = new Set(project.push_history.map(e => e.timestamp));
+                                const newEntries = data.history.filter(e => !existingTimestamps.has(e.timestamp));
+
+                                project.push_history.push(...newEntries);
+
+                                // Keep only last 50
+                                if (project.push_history.length > 50) {
+                                    project.push_history = project.push_history.slice(-50);
+                                }
+
+                                // Save to server
+                                saveCustomProjects();
+
+                                // Refresh the history display
+                                showGitPushHistory(projectId, project.name);
+
+                                showStatus(`Imported ${newEntries.length} commits from git log`, 'success');
+                                resolve();
+                            } else if (data.type === 'error') {
+                                clearTimeout(timeout);
+                                ws.removeEventListener('message', handler);
+                                reject(new Error(data.message || 'Import failed'));
+                            }
+                        };
+
+                        ws.addEventListener('message', handler);
+                    });
+                } else {
+                    throw new Error('WebSocket not connected');
+                }
+            } catch (error) {
+                console.error('Git log import error:', error);
+                showStatus('Failed to import git log: ' + error.message, 'error');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
         }
 
         // Show disk popover with all disks (df -h style)
