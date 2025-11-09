@@ -1110,6 +1110,19 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
         </div>
     </div>
 
+    <!-- Git Push History Modal -->
+    <div id="gitPushHistoryModal" class="modal">
+        <div class="modal-content" style="max-width: 800px;">
+            <h2 id="gitPushHistoryTitle">Git Push History</h2>
+            <div id="gitPushHistoryContent" style="max-height: 500px; overflow-y: auto;">
+                <!-- Push history will be listed here -->
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="hideGitPushHistoryModal()" style="background: #555; color: white;">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Connection Settings Popover -->
     <div id="connectionSettingsPopover" class="connection-settings-popover">
         <div class="connection-settings-header" id="connectionSettingsTitle">Connection Settings</div>
@@ -3309,6 +3322,36 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                     // Find the project by name to get its ID
                     const projectForGit = customProjects.find(p => p.name === projectName);
                     const projectId = projectForGit ? projectForGit.id : null;
+
+                    // Save push history to project
+                    if (projectForGit) {
+                        const historyEntry = {
+                            timestamp: data.timestamp || new Date().toISOString(),
+                            success: data.success,
+                            commit_message: data.commit_message || '',
+                            files_changed: data.files_changed || null,
+                            output: data.output || ''
+                        };
+
+                        // Initialize push_history array if it doesn't exist
+                        if (!projectForGit.push_history) {
+                            projectForGit.push_history = [];
+                        }
+
+                        // Add to history (keep last 50 entries)
+                        projectForGit.push_history.push(historyEntry);
+                        if (projectForGit.push_history.length > 50) {
+                            projectForGit.push_history.shift();
+                        }
+
+                        // Save to server
+                        const apiUrl = `${getProjectApiUrl()}/projects/${projectForGit.id}`;
+                        fetch(apiUrl, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(projectForGit)
+                        }).catch(err => console.error('Failed to save push history:', err));
+                    }
 
                     // Restore button state
                     if (projectId) {
@@ -6770,6 +6813,16 @@ Always add or update the version number on the dashboards or index or scripts wi
                     </button>
                 `;
 
+                // Git Push History button
+                headerHTML += `
+                    <button onclick="showGitPushHistory('${project.id}', '${project.name}'); event.stopPropagation();"
+                            style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;"
+                            onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'"
+                            title="View git push history">
+                        📜 History
+                    </button>
+                `;
+
                 // Edit button
                 headerHTML += `
                     <button onclick="showEditProjectModal(${JSON.stringify(project).replace(/"/g, '&quot;')}); event.stopPropagation();"
@@ -8643,6 +8696,57 @@ Always add or update the version number on the dashboards or index or scripts wi
                     btn.style.cursor = 'pointer';
                 }
             }
+        }
+
+        // Show git push history modal
+        function showGitPushHistory(projectId, projectName) {
+            const project = customProjects.find(p => p.id === projectId);
+            if (!project) {
+                showStatus('Project not found', 'error');
+                return;
+            }
+
+            document.getElementById('gitPushHistoryTitle').textContent = `${projectName} - Git Push History`;
+
+            const historyContent = document.getElementById('gitPushHistoryContent');
+            const pushHistory = project.push_history || [];
+
+            if (pushHistory.length === 0) {
+                historyContent.innerHTML = '<div style="padding: 20px; text-align: center; color: #888;">No push history yet</div>';
+            } else {
+                let html = '<div style="display: flex; flex-direction: column; gap: 10px;">';
+
+                // Show most recent first
+                pushHistory.slice().reverse().forEach((entry, index) => {
+                    const date = new Date(entry.timestamp);
+                    const dateStr = date.toLocaleString();
+                    const statusColor = entry.success ? '#3a9e3a' : '#9e3a3a';
+                    const statusIcon = entry.success ? '✓' : '✗';
+
+                    html += `
+                        <div style="padding: 12px; background: #2d2d2d; border-radius: 5px; border-left: 3px solid ${statusColor};">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                <div style="font-weight: 600; color: ${statusColor};">
+                                    ${statusIcon} ${entry.success ? 'Success' : 'Failed'}
+                                </div>
+                                <div style="color: #888; font-size: 12px;">${dateStr}</div>
+                            </div>
+                            ${entry.commit_message ? `<div style="color: #e0e0e0; margin-bottom: 6px; font-size: 13px;">📝 ${entry.commit_message}</div>` : ''}
+                            ${entry.files_changed ? `<div style="color: #888; font-size: 12px;">Files changed: ${entry.files_changed}</div>` : ''}
+                            ${entry.output ? `<div style="margin-top: 8px; padding: 8px; background: #1a1a1a; border-radius: 3px; font-family: monospace; font-size: 11px; color: #b0b0b0; white-space: pre-wrap; max-height: 150px; overflow-y: auto;">${entry.output}</div>` : ''}
+                        </div>
+                    `;
+                });
+
+                html += '</div>';
+                historyContent.innerHTML = html;
+            }
+
+            document.getElementById('gitPushHistoryModal').style.display = 'block';
+        }
+
+        function hideGitPushHistoryModal() {
+            document.getElementById('gitPushHistoryModal').style.display = 'none';
         }
 
         // Show disk popover with all disks (df -h style)

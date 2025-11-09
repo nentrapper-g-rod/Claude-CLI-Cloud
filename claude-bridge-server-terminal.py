@@ -2526,6 +2526,7 @@ class ClaudeBridgeTerminalServer:
                 'type': 'git_push_result',
                 'success': success,
                 'project_name': project_name,
+                'commit_message': commit_msg,
                 'output': '\n'.join(output_lines),
                 'timestamp': datetime.now().isoformat()
             })
