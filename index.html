@@ -6109,7 +6109,7 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Version constants
-        const WEB_APP_VERSION = '2.12.0';  // Web interface version - Simple git push integration
+        const WEB_APP_VERSION = '2.12.1';  // Web interface version - Refresh button in history chat modal
         const BRIDGE_VERSION = '2.12.0';    // Bridge server version - Simple git push integration
 
         // Update metrics display
@@ -6425,6 +6425,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             modalHeader.innerHTML = `
                 <div style="font-weight: 600; font-size: 16px;">📜 ${title}</div>
                 <div style="display: flex; gap: 10px; align-items: center;">
+                    <button id="refreshConversationBtn" style="background: #3a9e3a; border: none; color: white; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: 600;">🔄 Refresh</button>
                     <button id="scrollToBottomBtn" style="background: #4a9eff; border: none; color: white; cursor: pointer; font-size: 12px; padding: 6px 12px; border-radius: 4px; font-weight: 600;">⬇ Scroll to Bottom</button>
                     <button onclick="this.closest('[style*=\\'position: fixed\\']').remove()" style="background: none; border: none; color: #999; cursor: pointer; font-size: 24px; padding: 0;">×</button>
                 </div>
@@ -6434,101 +6435,109 @@ Always add or update the version number on the dashboards or index or scripts wi
             modalBody.style.cssText = 'flex: 1; overflow-y: auto; padding: 20px;';
             modalBody.innerHTML = '<div style="text-align: center; color: #888;">Loading messages...</div>';
 
+            // Function to load messages
+            const loadMessages = async () => {
+                modalBody.innerHTML = '<div style="text-align: center; color: #888;">Loading messages...</div>';
+
+                try {
+                    const response = await fetch(`${CONVERSATION_API_URL}/conversations/${sessionId}`);
+                    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+                    const data = await response.json();
+                    const messages = data.messages || [];
+
+                    if (messages.length === 0) {
+                        modalBody.innerHTML = '<div style="text-align: center; color: #888;">No messages found.</div>';
+                        return;
+                    }
+
+                    modalBody.innerHTML = '';
+                    messages.forEach(msg => {
+                        const msgEl = document.createElement('div');
+                        msgEl.style.cssText = `
+                            margin-bottom: 15px;
+                            padding: 12px;
+                            background: ${msg.role === 'user' ? '#2a3a4a' : '#3a2a4a'};
+                            border-left: 3px solid ${msg.role === 'user' ? '#4a9eff' : '#9e6aff'};
+                            border-radius: 5px;
+                        `;
+
+                        const msgHeader = document.createElement('div');
+                        msgHeader.style.cssText = 'font-weight: 600; margin-bottom: 5px; font-size: 12px; color: #e0e0e0;';
+                        msgHeader.textContent = msg.role === 'user' ? '👤 User' : '🤖 Assistant';
+
+                        const msgContent = document.createElement('div');
+                        msgContent.style.cssText = 'color: #e0e0e0; font-size: 13px; line-height: 1.5;';
+
+                        // Parse content - it might be JSON array of content blocks
+                        let contentBlocks = [];
+                        try {
+                            contentBlocks = JSON.parse(msg.content);
+                            if (!Array.isArray(contentBlocks)) {
+                                contentBlocks = [{ type: 'text', text: msg.content }];
+                            }
+                        } catch {
+                            // Plain text content
+                            contentBlocks = [{ type: 'text', text: msg.content }];
+                        }
+
+                        // Render each content block
+                        contentBlocks.forEach(block => {
+                            if (block.type === 'text') {
+                                const textDiv = document.createElement('div');
+                                textDiv.style.cssText = 'white-space: pre-wrap; word-break: break-word; margin-bottom: 10px;';
+                                textDiv.textContent = block.text;
+                                msgContent.appendChild(textDiv);
+                            } else if (block.type === 'tool_use') {
+                                const toolDiv = document.createElement('div');
+                                toolDiv.style.cssText = 'background: #1a1a1a; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-family: monospace; font-size: 12px;';
+                                toolDiv.innerHTML = `<div style="color: #4a9eff; font-weight: 600; margin-bottom: 5px;">🔧 ${block.name}</div><div style="color: #888;">${JSON.stringify(block.input, null, 2)}</div>`;
+                                msgContent.appendChild(toolDiv);
+                            } else if (block.type === 'tool_result') {
+                                const resultDiv = document.createElement('div');
+                                resultDiv.style.cssText = 'background: #1a2a1a; padding: 8px; border-radius: 4px; margin-bottom: 10px; font-family: monospace; font-size: 12px;';
+                                resultDiv.innerHTML = `<div style="color: #3a9e3a; font-weight: 600; margin-bottom: 5px;">✓ Tool Result</div><div style="color: #888;">${typeof block.content === 'string' ? block.content : JSON.stringify(block.content, null, 2)}</div>`;
+                                msgContent.appendChild(resultDiv);
+                            }
+                        });
+
+                        msgEl.appendChild(msgHeader);
+                        msgEl.appendChild(msgContent);
+
+                        const msgMeta = document.createElement('div');
+                        msgMeta.style.cssText = 'font-size: 10px; color: #666; margin-top: 8px;';
+                        msgMeta.textContent = new Date(msg.timestamp).toLocaleString();
+                        msgEl.appendChild(msgMeta);
+
+                        modalBody.appendChild(msgEl);
+                    });
+
+                    // Auto scroll to bottom after loading
+                    setTimeout(() => {
+                        modalBody.scrollTo({ top: modalBody.scrollHeight, behavior: 'smooth' });
+                    }, 100);
+
+                } catch (error) {
+                    console.error('Error loading messages:', error);
+                    modalBody.innerHTML = '<div style="text-align: center; color: #ff4a4a;">Failed to load messages.</div>';
+                }
+            };
+
             // Add scroll to bottom functionality
             modalHeader.querySelector('#scrollToBottomBtn').addEventListener('click', () => {
                 modalBody.scrollTo({ top: modalBody.scrollHeight, behavior: 'smooth' });
             });
+
+            // Add refresh functionality
+            modalHeader.querySelector('#refreshConversationBtn').addEventListener('click', loadMessages);
 
             modalContent.appendChild(modalHeader);
             modalContent.appendChild(modalBody);
             modal.appendChild(modalContent);
             document.body.appendChild(modal);
 
-            // Load messages
-            try {
-                const response = await fetch(`${CONVERSATION_API_URL}/conversations/${sessionId}`);
-                if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-                const data = await response.json();
-                const messages = data.messages || [];
-
-                if (messages.length === 0) {
-                    modalBody.innerHTML = '<div style="text-align: center; color: #888;">No messages found.</div>';
-                    return;
-                }
-
-                modalBody.innerHTML = '';
-                messages.forEach(msg => {
-                    const msgEl = document.createElement('div');
-                    msgEl.style.cssText = `
-                        margin-bottom: 15px;
-                        padding: 12px;
-                        background: ${msg.role === 'user' ? '#2a3a4a' : '#3a2a4a'};
-                        border-left: 3px solid ${msg.role === 'user' ? '#4a9eff' : '#9e6aff'};
-                        border-radius: 5px;
-                    `;
-
-                    const msgHeader = document.createElement('div');
-                    msgHeader.style.cssText = 'font-weight: 600; margin-bottom: 5px; font-size: 12px; color: #e0e0e0;';
-                    msgHeader.textContent = msg.role === 'user' ? '👤 User' : '🤖 Assistant';
-
-                    const msgContent = document.createElement('div');
-                    msgContent.style.cssText = 'color: #e0e0e0; font-size: 13px; line-height: 1.5;';
-
-                    // Parse content - it might be JSON array of content blocks
-                    let contentBlocks = [];
-                    try {
-                        contentBlocks = JSON.parse(msg.content);
-                        if (!Array.isArray(contentBlocks)) {
-                            contentBlocks = [{ type: 'text', text: msg.content }];
-                        }
-                    } catch {
-                        // Plain text content
-                        contentBlocks = [{ type: 'text', text: msg.content }];
-                    }
-
-                    // Render each content block
-                    contentBlocks.forEach(block => {
-                        if (block.type === 'text') {
-                            const textDiv = document.createElement('div');
-                            textDiv.style.cssText = 'white-space: pre-wrap; word-break: break-word; margin-bottom: 10px;';
-                            textDiv.textContent = block.text;
-                            msgContent.appendChild(textDiv);
-                        } else if (block.type === 'tool_use') {
-                            const toolDiv = document.createElement('div');
-                            toolDiv.style.cssText = 'background: #1a1a1a; border: 1px solid #4a4a4a; border-radius: 5px; padding: 10px; margin-bottom: 10px; font-family: monospace;';
-
-                            const toolHeader = document.createElement('div');
-                            toolHeader.style.cssText = 'color: #6ac259; font-weight: 600; margin-bottom: 5px;';
-                            toolHeader.textContent = `🔧 ${block.name}`;
-                            toolDiv.appendChild(toolHeader);
-
-                            if (block.input) {
-                                const inputPre = document.createElement('pre');
-                                inputPre.style.cssText = 'color: #ccc; font-size: 12px; margin: 0; white-space: pre-wrap; word-break: break-word;';
-                                inputPre.textContent = JSON.stringify(block.input, null, 2);
-                                toolDiv.appendChild(inputPre);
-                            }
-
-                            msgContent.appendChild(toolDiv);
-                        }
-                    });
-
-                    const msgTime = document.createElement('div');
-                    msgTime.style.cssText = 'font-size: 10px; color: #888; margin-top: 5px;';
-                    msgTime.textContent = new Date(msg.timestamp).toLocaleString();
-
-                    msgEl.appendChild(msgHeader);
-                    msgEl.appendChild(msgContent);
-                    msgEl.appendChild(msgTime);
-
-                    modalBody.appendChild(msgEl);
-                });
-
-            } catch (error) {
-                console.error('Error loading messages:', error);
-                modalBody.innerHTML = '<div style="text-align: center; color: #ff4a4a;">Failed to load messages.</div>';
-            }
+            // Load messages initially
+            loadMessages();
         }
 
         // Load connection filter options
@@ -6664,7 +6673,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             let sessions = (connTab && connTab.sessions) ? connTab.sessions : [];
 
             // If no sessions loaded yet, try to load from localStorage
-            if (!sessions || !sessions.projects) {
+            if (!sessions || sessions.length === 0) {
                 const cached = localStorage.getItem(`sessions_${state.activeConnectionTab}`);
                 if (cached) {
                     try {
@@ -6672,8 +6681,15 @@ Always add or update the version number on the dashboards or index or scripts wi
                         console.log('Loaded sessions from localStorage cache');
                     } catch (e) {
                         console.error('Error parsing cached sessions:', e);
+                        sessions = [];
                     }
                 }
+            }
+
+            // Ensure sessions is an array
+            if (!Array.isArray(sessions)) {
+                console.warn('Sessions is not an array, converting:', sessions);
+                sessions = [];
             }
 
             projectsList.innerHTML = '';
