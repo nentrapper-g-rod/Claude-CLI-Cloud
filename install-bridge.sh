@@ -85,14 +85,24 @@ curl -f -o claude-bridge-server-terminal.py "${SOURCE_SERVER}/download/claude-br
 
 chmod +x claude-bridge-server-terminal.py
 
-# Check if service is already running and needs restart
-SERVICE_WAS_RUNNING=false
-if command -v systemctl &> /dev/null; then
-    if sudo systemctl is-active --quiet claude-bridge; then
-        echo "Bridge service is currently running - will restart after installation"
-        SERVICE_WAS_RUNNING=true
-    fi
-fi
+# Download MCP server and dependencies
+echo "Downloading MCP server components..."
+curl -f -o conversation-mcp-server.py "${SOURCE_SERVER}/download/conversation-mcp-server.py" 2>/dev/null || {
+    echo "Warning: Failed to download MCP server (optional)"
+}
+curl -f -o conversation_db.py "${SOURCE_SERVER}/download/conversation_db.py" 2>/dev/null || {
+    echo "Warning: Failed to download conversation DB (optional)"
+}
+curl -f -o conversation-hook.py "${SOURCE_SERVER}/download/conversation-hook.py" 2>/dev/null || {
+    echo "Warning: Failed to download conversation hook (optional)"
+}
+curl -f -o install-mcp-config.sh "${SOURCE_SERVER}/download/install-mcp-config.sh" 2>/dev/null || {
+    echo "Warning: Failed to download MCP config script (optional)"
+}
+
+chmod +x conversation-mcp-server.py conversation-hook.py install-mcp-config.sh 2>/dev/null
+
+# Service will be restarted at the end of installation
 
 # Check Python version
 echo "Checking Python installation..."
@@ -107,18 +117,38 @@ fi
 PYTHON_VERSION=$(python3 -c 'import sys; print(".".join(map(str, sys.version_info[:2])))')
 echo "Found Python ${PYTHON_VERSION}"
 
-# Install Python dependencies
+# Install Python dependencies (including MCP)
 echo "Installing Python dependencies..."
-pip3 install --user websockets aiofiles psutil 2>/dev/null || \
-pip3 install --break-system-packages websockets aiofiles psutil 2>/dev/null || \
-sudo pip3 install --break-system-packages websockets aiofiles psutil 2>/dev/null || {
+pip3 install --user websockets aiofiles psutil aiohttp mcp 2>/dev/null || \
+pip3 install --break-system-packages websockets aiofiles psutil aiohttp mcp 2>/dev/null || \
+sudo pip3 install --break-system-packages websockets aiofiles psutil aiohttp mcp 2>/dev/null || {
     echo "Error: Failed to install Python dependencies."
     echo "Please install manually:"
-    echo "  pip3 install --break-system-packages websockets aiofiles psutil"
+    echo "  pip3 install --break-system-packages websockets aiofiles psutil aiohttp mcp"
     echo "or"
-    echo "  sudo apt install python3-websockets python3-aiofiles python3-psutil"
+    echo "  sudo apt install python3-websockets python3-aiofiles python3-psutil python3-aiohttp"
+    echo "  pip3 install --break-system-packages mcp"
     exit 1
 }
+
+# Check if tmux is installed
+echo "Checking tmux installation..."
+if ! command -v tmux &> /dev/null; then
+    echo "Warning: tmux is not installed"
+    echo "Install it with:"
+    echo "  Ubuntu/Debian: sudo apt install tmux"
+    echo "  RHEL/CentOS: sudo yum install tmux"
+
+    if [ -t 0 ]; then
+        read -p "Continue anyway? (y/n) " -n 1 -r
+        echo ""
+        if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+            exit 1
+        fi
+    else
+        echo "Continuing anyway (non-interactive mode)..."
+    fi
+fi
 
 # Check if Claude CLI is installed
 echo "Checking Claude CLI installation..."
@@ -142,12 +172,6 @@ if command -v systemctl &> /dev/null; then
     echo "Creating systemd service..."
 
     SERVICE_FILE="/etc/systemd/system/claude-bridge.service"
-
-    # Stop existing service if running
-    if sudo systemctl is-active --quiet claude-bridge; then
-        echo "Stopping existing claude-bridge service..."
-        sudo systemctl stop claude-bridge
-    fi
 
     # Determine if debug mode should be enabled (port 8766 only)
     DEBUG_FLAG=""
@@ -194,37 +218,6 @@ EOF
     echo "  Status:  sudo systemctl status claude-bridge"
     echo "  Enable:  sudo systemctl enable claude-bridge  (start on boot)"
     echo ""
-
-    # For non-interactive mode (updates via curl), ALWAYS restart the service
-    if [ ! -t 0 ]; then
-        echo "Non-interactive mode: Restarting service..."
-        sudo systemctl restart claude-bridge 2>&1
-        RESTART_EXIT=$?
-        echo "Service restart exit code: $RESTART_EXIT"
-
-        if [ $RESTART_EXIT -eq 0 ]; then
-            echo "Service restarted successfully!"
-        else
-            echo "Service restart failed. Please check: sudo systemctl status claude-bridge"
-        fi
-    # For interactive mode, check if service was running and restart, or prompt
-    elif [ "$SERVICE_WAS_RUNNING" = true ]; then
-        echo "Restarting service (was previously running)..."
-        sudo systemctl restart claude-bridge
-        echo "Service restarted!"
-        sleep 2
-        sudo systemctl status claude-bridge --no-pager || true
-    # Only prompt if interactive and service wasn't detected as running
-    elif [ -t 0 ]; then
-        read -p "Start the service now? (y/n) " -n 1 -r
-        echo ""
-        if [[ $REPLY =~ ^[Yy]$ ]]; then
-            sudo systemctl start claude-bridge
-            echo "Service started!"
-            sleep 2
-            sudo systemctl status claude-bridge --no-pager
-        fi
-    fi
 else
     echo "Systemd not available. Creating start script..."
 
@@ -239,6 +232,87 @@ EOF
     echo ""
     echo "Start script created at: ${INSTALL_DIR}/start-bridge.sh"
     echo "Run it with: ${INSTALL_DIR}/start-bridge.sh"
+fi
+
+# Configure MCP if files were downloaded
+if [ -f "${INSTALL_DIR}/conversation-mcp-server.py" ]; then
+    echo ""
+    echo "Configuring MCP server..."
+    mkdir -p ~/.config/claude
+
+    cat > ~/.config/claude/mcp_config.json <<EOF
+{
+  "mcpServers": {
+    "conversation-history": {
+      "command": "python3",
+      "args": [
+        "${INSTALL_DIR}/conversation-mcp-server.py"
+      ],
+      "env": {}
+    }
+  }
+}
+EOF
+    echo "✓ MCP configuration created at ~/.config/claude/mcp_config.json"
+fi
+
+# Configure conversation hooks if files were downloaded
+if [ -f "${INSTALL_DIR}/conversation-hook.py" ]; then
+    echo ""
+    echo "Configuring conversation hooks..."
+    mkdir -p ~/.claude
+
+    python3 <<PYEOF
+import json
+from pathlib import Path
+
+settings_file = Path.home() / '.claude' / 'settings.json'
+
+# Read existing settings or create new
+if settings_file.exists():
+    with open(settings_file, 'r') as f:
+        try:
+            settings = json.load(f)
+        except json.JSONDecodeError:
+            settings = {}
+else:
+    settings = {}
+
+# Configure hooks
+hook_path = "${INSTALL_DIR}/conversation-hook.py"
+settings['hooks'] = {
+    "UserPromptSubmit": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": hook_path
+                }
+            ]
+        }
+    ],
+    "Stop": [
+        {
+            "hooks": [
+                {
+                    "type": "command",
+                    "command": hook_path
+                }
+            ]
+        }
+    ]
+}
+
+# Preserve appendSystemPrompt if it exists
+if 'appendSystemPrompt' not in settings:
+    settings['appendSystemPrompt'] = ""
+
+# Write back
+with open(settings_file, 'w') as f:
+    json.dump(settings, f, indent=2)
+
+print("✓ Conversation hooks configured in ~/.claude/settings.json")
+PYEOF
 fi
 
 echo ""
@@ -261,3 +335,18 @@ echo "Make sure firewall allows port ${WS_PORT}:"
 echo "  UFW:      sudo ufw allow ${WS_PORT}/tcp"
 echo "  Firewalld: sudo firewall-cmd --add-port=${WS_PORT}/tcp --permanent"
 echo ""
+
+# Restart the service at the end
+if command -v systemctl &> /dev/null; then
+    echo "Restarting claude-bridge service..."
+    sudo systemctl restart claude-bridge 2>&1
+    RESTART_EXIT=$?
+
+    if [ $RESTART_EXIT -eq 0 ]; then
+        echo "✓ Service restarted successfully!"
+        sleep 2
+        sudo systemctl status claude-bridge --no-pager || true
+    else
+        echo "✗ Service restart failed. Check: sudo systemctl status claude-bridge"
+    fi
+fi
