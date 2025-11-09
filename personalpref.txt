@@ -1,5 +1,6 @@
 Never ever put shutdown or reboot or kill a system process in any script unless I explicitly say to! Disable animation with code writing and present the file for download as fast as possible.  Try not to repeat yourself unless the code demands some type of repeated action. I want the scripts written as quickly as possible and presented without delay.
 
+keep from changing port numbers when updating code or restarting an app. 
 
 Default Development Script Guidelines for AI Automation:
 

@@ -2465,6 +2465,8 @@ class ClaudeBridgeTerminalServer:
             project_name = data.get('project_name', 'Unknown')
             github_token = data.get('github_token', '')
             repo_url = data.get('repo_url', '')
+            git_exclude = data.get('git_exclude', [])  # List of patterns to exclude
+            exclude_large_files = data.get('exclude_large_files', False)  # Exclude files > 20MB
 
             if not cwd:
                 await self.send_error(websocket, "Missing project directory")
@@ -2475,6 +2477,104 @@ class ClaudeBridgeTerminalServer:
             commit_msg = f"Auto-save {timestamp}"
 
             print(f"[{datetime.now().isoformat()}] Git push for {project_name} at {cwd}")
+
+            # Check if directory is a git repository, initialize if not
+            check_git_cmd = f"cd {shlex.quote(cwd)} && git rev-parse --git-dir"
+            proc = await asyncio.create_subprocess_shell(
+                check_git_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            await proc.communicate()
+
+            output_lines = []
+
+            # If not a git repo, initialize it
+            if proc.returncode != 0:
+                print(f"[{datetime.now().isoformat()}] Initializing git repository in {cwd}")
+                init_cmd = f"cd {shlex.quote(cwd)} && git init"
+                proc = await asyncio.create_subprocess_shell(
+                    init_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.STDOUT
+                )
+                stdout, _ = await proc.communicate()
+                output = stdout.decode().strip()
+                if output:
+                    output_lines.append(f"✓ Initialized git repository\n{output}")
+
+                # Set default branch to main
+                branch_cmd = f"cd {shlex.quote(cwd)} && git branch -M main"
+                await asyncio.create_subprocess_shell(branch_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+
+            # Always configure git user for this repository (needed for commits)
+            config_cmds = [
+                f"cd {shlex.quote(cwd)} && git config user.email 'claude-cli@automated.local'",
+                f"cd {shlex.quote(cwd)} && git config user.name 'Claude CLI Auto-Save'"
+            ]
+            for cmd in config_cmds:
+                await asyncio.create_subprocess_shell(cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+
+            # Check for embedded git repositories and submodules and exclude them
+            # Find directories with .git (embedded repos) or files named .git (submodules)
+            find_cmd = f"cd {shlex.quote(cwd)} && find . -mindepth 2 -maxdepth 3 -name '.git' -exec dirname {{}} \\;"
+            proc = await asyncio.create_subprocess_shell(
+                find_cmd,
+                stdout=asyncio.subprocess.PIPE,
+                stderr=asyncio.subprocess.PIPE
+            )
+            stdout, _ = await proc.communicate()
+            embedded_repos = [line.strip('./') for line in stdout.decode().strip().split('\n') if line.strip()]
+
+            # Collect all exclusions to add to .gitignore
+            all_exclusions = set()
+
+            # Add embedded repos
+            if embedded_repos:
+                all_exclusions.update(embedded_repos)
+                # Remove them from git index if they were already tracked
+                for repo in embedded_repos:
+                    rm_cmd = f"cd {shlex.quote(cwd)} && git rm --cached -r {shlex.quote(repo)} 2>/dev/null"
+                    proc = await asyncio.create_subprocess_shell(rm_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                    await proc.communicate()
+
+            # Add user-specified exclusions
+            if git_exclude:
+                all_exclusions.update(git_exclude)
+                output_lines.append(f"✓ Adding {len(git_exclude)} user-specified exclusions to .gitignore")
+
+            # Find and exclude large files (> 20MB)
+            if exclude_large_files:
+                find_large_cmd = f"cd {shlex.quote(cwd)} && find . -type f -size +20M -not -path './.git/*' 2>/dev/null"
+                proc = await asyncio.create_subprocess_shell(
+                    find_large_cmd,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE
+                )
+                stdout, _ = await proc.communicate()
+                large_files = [line.strip('./') for line in stdout.decode().strip().split('\n') if line.strip()]
+
+                if large_files:
+                    all_exclusions.update(large_files)
+                    output_lines.append(f"✓ Excluding {len(large_files)} large files (>20MB) from git")
+                    # Remove them from git index if already tracked
+                    for file in large_files:
+                        rm_cmd = f"cd {shlex.quote(cwd)} && git rm --cached {shlex.quote(file)} 2>/dev/null"
+                        proc = await asyncio.create_subprocess_shell(rm_cmd, stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.PIPE)
+                        await proc.communicate()
+
+            # Update .gitignore with all exclusions
+            if all_exclusions:
+                gitignore_path = Path(cwd) / '.gitignore'
+                existing_ignores = set()
+                if gitignore_path.exists():
+                    existing_ignores = set(line for line in gitignore_path.read_text().strip().split('\n') if line.strip())
+
+                new_ignores = existing_ignores.union(all_exclusions)
+                gitignore_path.write_text('\n'.join(sorted(new_ignores)) + '\n')
+
+                if embedded_repos:
+                    output_lines.append(f"✓ Added {len(embedded_repos)} embedded repos to .gitignore")
 
             # Setup commands
             commands = []
@@ -2494,7 +2594,7 @@ class ClaudeBridgeTerminalServer:
             commands.extend([
                 f"cd {shlex.quote(cwd)} && git add -A",
                 f"cd {shlex.quote(cwd)} && git commit -m {shlex.quote(commit_msg)}",
-                f"cd {shlex.quote(cwd)} && git push"
+                f"cd {shlex.quote(cwd)} && git push -u origin main 2>&1"
             ])
 
             output_lines = []

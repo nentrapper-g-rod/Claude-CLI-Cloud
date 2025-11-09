@@ -986,6 +986,22 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                     </div>
                 </div>
                 <div class="form-group">
+                    <label for="editProjectGitExcludeInput">Git Exclusions (optional):</label>
+                    <textarea id="editProjectGitExcludeInput" rows="4" placeholder="node_modules&#10;*.log&#10;.env&#10;dist&#10;*-env" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
+                    <div style="margin-top: 4px; font-size: 11px; color: #888;">
+                        Files and directories to exclude from git push (one per line). These will be added to .gitignore during push.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="editProjectExcludeLargeFilesInput" style="cursor: pointer;">
+                        <span>Exclude files larger than 20MB from git push</span>
+                    </label>
+                    <div style="margin-top: 4px; font-size: 11px; color: #888;">
+                        Automatically skip files over 20MB to prevent slow or failed pushes
+                    </div>
+                </div>
+                <div class="form-group">
                     <label for="editProjectColorInput">Color:</label>
                     <select id="editProjectColorInput" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
                         <option value="#4a9eff">Blue</option>
@@ -1049,6 +1065,22 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                     <input type="url" id="projectLinkInput" placeholder="e.g., https://github.com/users/username/projects/123" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
                     <div style="margin-top: 4px; font-size: 11px; color: #888;">
                         Add a link to GitHub project, documentation, or related resource
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="projectGitExcludeInput">Git Exclusions (optional):</label>
+                    <textarea id="projectGitExcludeInput" rows="4" placeholder="node_modules&#10;*.log&#10;.env&#10;dist&#10;*-env" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
+                    <div style="margin-top: 4px; font-size: 11px; color: #888;">
+                        Files and directories to exclude from git push (one per line). These will be added to .gitignore during push.
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label style="display: flex; align-items: center; gap: 8px; cursor: pointer;">
+                        <input type="checkbox" id="projectExcludeLargeFilesInput" style="cursor: pointer;">
+                        <span>Exclude files larger than 20MB from git push</span>
+                    </label>
+                    <div style="margin-top: 4px; font-size: 11px; color: #888;">
+                        Automatically skip files over 20MB to prevent slow or failed pushes
                     </div>
                 </div>
                 <div class="form-group">
@@ -7071,6 +7103,11 @@ Always add or update the version number on the dashboards or index or scripts wi
             document.getElementById('editProjectRepoInput').value = project.repo || '';
             document.getElementById('editProjectGithubTokenInput').value = project.github_token || '';
             document.getElementById('editProjectLinkInput').value = project.link || '';
+            document.getElementById('editProjectGitExcludeInput').value = Array.isArray(project.git_exclude) ? project.git_exclude.join('\n') : (project.git_exclude || '');
+            const excludeLargeFilesCheckbox = document.getElementById('editProjectExcludeLargeFilesInput');
+            if (excludeLargeFilesCheckbox) {
+                excludeLargeFilesCheckbox.checked = project.exclude_large_files || false;
+            }
             document.getElementById('editProjectColorInput').value = project.color || '#4a9eff';
 
             const connectionSelect = document.getElementById('editProjectConnectionInput');
@@ -7105,6 +7142,8 @@ Always add or update the version number on the dashboards or index or scripts wi
             const repo = document.getElementById('editProjectRepoInput').value.trim();
             const githubToken = document.getElementById('editProjectGithubTokenInput').value.trim();
             const link = document.getElementById('editProjectLinkInput').value.trim();
+            const gitExclude = document.getElementById('editProjectGitExcludeInput').value.trim();
+            const excludeLargeFiles = document.getElementById('editProjectExcludeLargeFilesInput')?.checked || false;
             const color = document.getElementById('editProjectColorInput').value;
 
             if (!name) return;
@@ -7138,6 +7177,8 @@ Always add or update the version number on the dashboards or index or scripts wi
                         repo,
                         github_token: githubToken,
                         link,
+                        git_exclude: gitExclude ? gitExclude.split('\n').map(s => s.trim()).filter(s => s) : [],
+                        exclude_large_files: excludeLargeFiles,
                         directories,
                         connection_index: connectionIndex !== '' ? parseInt(connectionIndex) : null,
                         color
@@ -7187,6 +7228,8 @@ Always add or update the version number on the dashboards or index or scripts wi
             const repo = document.getElementById('projectRepoInput').value.trim();
             const githubToken = document.getElementById('projectGithubTokenInput').value.trim();
             const link = document.getElementById('projectLinkInput').value.trim();
+            const gitExclude = document.getElementById('projectGitExcludeInput').value.trim();
+            const excludeLargeFiles = document.getElementById('projectExcludeLargeFilesInput')?.checked || false;
             const color = document.getElementById('projectColorInput').value;
 
             if (!name) return;
@@ -7206,6 +7249,8 @@ Always add or update the version number on the dashboards or index or scripts wi
                         repo,
                         github_token: githubToken,
                         link,
+                        git_exclude: gitExclude ? gitExclude.split('\n').map(s => s.trim()).filter(s => s) : [],
+                        exclude_large_files: excludeLargeFiles,
                         color
                     })
                 });
@@ -8682,7 +8727,9 @@ Always add or update the version number on the dashboards or index or scripts wi
                     cwd: cwd,
                     project_name: projectName || 'Unknown',
                     github_token: project.github_token || '',
-                    repo_url: project.repo || ''
+                    repo_url: project.repo || '',
+                    git_exclude: project.git_exclude || [],
+                    exclude_large_files: project.exclude_large_files || false
                 }));
 
                 showStatus(`Pushing changes for ${projectName}...`, 'info');
