@@ -3075,6 +3075,57 @@ class ClaudeBridgeTerminalServer:
         except Exception as e:
             return web.json_response({'error': str(e)}, status=500, headers={'Access-Control-Allow-Origin': '*'})
 
+    async def handle_http_read_file(self, request):
+        """HTTP API: Read a file"""
+        try:
+            data = await request.json()
+            file_path = data.get('file_path')
+
+            if not file_path:
+                return web.json_response({'error': 'file_path is required'}, status=400, headers={'Access-Control-Allow-Origin': '*'})
+
+            file_path = Path(file_path).expanduser().resolve()
+
+            # Security: Ensure file is not trying to access sensitive system files
+            if not file_path.exists():
+                return web.json_response({'error': 'File not found', 'content': ''}, status=404, headers={'Access-Control-Allow-Origin': '*'})
+
+            if not file_path.is_file():
+                return web.json_response({'error': 'Path is not a file'}, status=400, headers={'Access-Control-Allow-Origin': '*'})
+
+            # Read file content
+            async with aiofiles.open(file_path, 'r', encoding='utf-8') as f:
+                content = await f.read()
+
+            return web.json_response({'content': content}, headers={'Access-Control-Allow-Origin': '*'})
+        except UnicodeDecodeError:
+            return web.json_response({'error': 'File is not a text file'}, status=400, headers={'Access-Control-Allow-Origin': '*'})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500, headers={'Access-Control-Allow-Origin': '*'})
+
+    async def handle_http_write_file(self, request):
+        """HTTP API: Write a file"""
+        try:
+            data = await request.json()
+            file_path = data.get('file_path')
+            content = data.get('content', '')
+
+            if not file_path:
+                return web.json_response({'error': 'file_path is required'}, status=400, headers={'Access-Control-Allow-Origin': '*'})
+
+            file_path = Path(file_path).expanduser().resolve()
+
+            # Ensure parent directory exists
+            file_path.parent.mkdir(parents=True, exist_ok=True)
+
+            # Write file content
+            async with aiofiles.open(file_path, 'w', encoding='utf-8') as f:
+                await f.write(content)
+
+            return web.json_response({'success': True}, headers={'Access-Control-Allow-Origin': '*'})
+        except Exception as e:
+            return web.json_response({'error': str(e)}, status=500, headers={'Access-Control-Allow-Origin': '*'})
+
     async def handle_http_options(self, request):
         """Handle CORS preflight"""
         return web.Response(headers={
@@ -3320,6 +3371,10 @@ class ClaudeBridgeTerminalServer:
         app.router.add_options('/api/projects/{project_id}/sessions', self.handle_http_options)
         app.router.add_options('/api/connections', self.handle_http_options)
         app.router.add_options('/api/preferences', self.handle_http_options)
+        app.router.add_post('/api/read-file', self.handle_http_read_file)
+        app.router.add_post('/api/write-file', self.handle_http_write_file)
+        app.router.add_options('/api/read-file', self.handle_http_options)
+        app.router.add_options('/api/write-file', self.handle_http_options)
 
         runner = web.AppRunner(app)
         await runner.setup()

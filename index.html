@@ -1157,6 +1157,28 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
         </div>
     </div>
 
+    <!-- Project Docs Editor Modal -->
+    <div id="projectDocsEditorModal" class="modal">
+        <div class="modal-content" style="max-width: 900px; max-height: 90vh;">
+            <h2 id="docsEditorTitle">📝 Edit Project Documentation</h2>
+            <div style="margin-bottom: 15px; display: flex; gap: 8px; flex-wrap: wrap;">
+                <button onclick="switchDocsFile('README.md')" id="docBtn-README.md" style="padding: 8px 16px; background: #4a9eff; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">README.md</button>
+                <button onclick="switchDocsFile('CONTRIBUTING.md')" id="docBtn-CONTRIBUTING.md" style="padding: 8px 16px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">CONTRIBUTING.md</button>
+                <button onclick="switchDocsFile('LICENSE')" id="docBtn-LICENSE" style="padding: 8px 16px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">LICENSE</button>
+                <button onclick="switchDocsFile('.gitignore')" id="docBtn-.gitignore" style="padding: 8px 16px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">.gitignore</button>
+                <button onclick="switchDocsFile('CHANGELOG.md')" id="docBtn-CHANGELOG.md" style="padding: 8px 16px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">CHANGELOG.md</button>
+            </div>
+            <div style="margin-bottom: 15px;">
+                <div style="font-size: 12px; color: #888; margin-bottom: 5px;">Current file: <span id="currentDocsFile" style="color: #4a9eff; font-family: monospace;">README.md</span></div>
+                <textarea id="docsEditorTextarea" rows="20" style="width: 100%; padding: 12px; background: #1a1a1a; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 13px; line-height: 1.5; resize: vertical;"></textarea>
+            </div>
+            <div class="modal-buttons">
+                <button type="button" onclick="saveDocsFile()" style="background: #3a9e3a; color: white;">💾 Save File</button>
+                <button type="button" onclick="hideProjectDocsEditor()" style="background: #555; color: white;">Close</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Connection Settings Popover -->
     <div id="connectionSettingsPopover" class="connection-settings-popover">
         <div class="connection-settings-header" id="connectionSettingsTitle">Connection Settings</div>
@@ -6907,6 +6929,19 @@ Always add or update the version number on the dashboards or index or scripts wi
                     `;
                 }
 
+                // Edit Docs button (if project has a directory)
+                const projectDirs = project.directories || (project.working_directory ? [project.working_directory] : []);
+                if (projectDirs.length > 0) {
+                    headerHTML += `
+                        <button onclick="openProjectDocsEditor('${project.id}'); event.stopPropagation();"
+                                style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;"
+                                onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'"
+                                title="Edit README and documentation">
+                            📝 Edit Docs
+                        </button>
+                    `;
+                }
+
                 // Close the button container div
                 headerHTML += `
                         </div>
@@ -8906,6 +8941,137 @@ Always add or update the version number on the dashboards or index or scripts wi
             } finally {
                 btn.textContent = originalText;
                 btn.disabled = false;
+            }
+        }
+
+        // Project Docs Editor
+        let currentDocsProject = null;
+        let currentDocsFile = 'README.md';
+
+        async function openProjectDocsEditor(projectId) {
+            const project = customProjects.find(p => p.id === projectId);
+            if (!project) {
+                showStatus('Project not found', 'error');
+                return;
+            }
+
+            const projectDirs = project.directories || (project.working_directory ? [project.working_directory] : []);
+            if (projectDirs.length === 0) {
+                showStatus('No directory configured for this project', 'error');
+                return;
+            }
+
+            currentDocsProject = project;
+            currentDocsFile = 'README.md';
+
+            // Update modal title
+            document.getElementById('docsEditorTitle').textContent = `📝 Edit Documentation - ${project.name}`;
+
+            // Show modal
+            document.getElementById('projectDocsEditorModal').style.display = 'block';
+
+            // Load README.md by default
+            switchDocsFile('README.md');
+        }
+
+        function hideProjectDocsEditor() {
+            document.getElementById('projectDocsEditorModal').style.display = 'none';
+            currentDocsProject = null;
+            currentDocsFile = 'README.md';
+        }
+
+        async function switchDocsFile(filename) {
+            if (!currentDocsProject) return;
+
+            currentDocsFile = filename;
+
+            // Update button styles
+            const buttons = ['README.md', 'CONTRIBUTING.md', 'LICENSE', '.gitignore', 'CHANGELOG.md'];
+            buttons.forEach(btn => {
+                const elem = document.getElementById(`docBtn-${btn}`);
+                if (elem) {
+                    if (btn === filename) {
+                        elem.style.background = '#4a9eff';
+                        elem.style.color = 'white';
+                        elem.style.fontWeight = '600';
+                    } else {
+                        elem.style.background = '#3a3a3a';
+                        elem.style.color = '#e0e0e0';
+                        elem.style.fontWeight = 'normal';
+                    }
+                }
+            });
+
+            // Update current file display
+            document.getElementById('currentDocsFile').textContent = filename;
+
+            // Load file content
+            const projectDirs = currentDocsProject.directories || (currentDocsProject.working_directory ? [currentDocsProject.working_directory] : []);
+            const projectDir = projectDirs[0];
+
+            try {
+                const response = await fetch(`${getProjectApiUrl()}/read-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: `${projectDir}/${filename}`
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok && data.content !== undefined) {
+                    document.getElementById('docsEditorTextarea').value = data.content;
+                } else {
+                    // File doesn't exist, create empty template
+                    let template = '';
+                    if (filename === 'README.md') {
+                        template = `# ${currentDocsProject.name}\n\n${currentDocsProject.description || 'Project description here.'}\n\n## Features\n\n- Feature 1\n- Feature 2\n\n## Installation\n\n\`\`\`bash\n# Installation instructions\n\`\`\`\n\n## Usage\n\n\`\`\`bash\n# Usage examples\n\`\`\`\n\n## License\n\nMIT License`;
+                    } else if (filename === 'CONTRIBUTING.md') {
+                        template = `# Contributing to ${currentDocsProject.name}\n\nThank you for considering contributing to this project!\n\n## How to Contribute\n\n1. Fork the repository\n2. Create a new branch for your feature\n3. Make your changes\n4. Submit a pull request\n\n## Code of Conduct\n\nPlease be respectful and constructive in all interactions.`;
+                    } else if (filename === 'LICENSE') {
+                        template = `MIT License\n\nCopyright (c) ${new Date().getFullYear()} ${currentDocsProject.name}\n\nPermission is hereby granted, free of charge, to any person obtaining a copy\nof this software and associated documentation files (the "Software"), to deal\nin the Software without restriction, including without limitation the rights\nto use, copy, modify, merge, publish, distribute, sublicense, and/or sell\ncopies of the Software, and to permit persons to whom the Software is\nfurnished to do so, subject to the following conditions:\n\nThe above copyright notice and this permission notice shall be included in all\ncopies or substantial portions of the Software.\n\nTHE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR\nIMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,\nFITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE\nAUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER\nLIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,\nOUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE\nSOFTWARE.`;
+                    } else if (filename === '.gitignore') {
+                        template = `# Dependencies\nnode_modules/\n*.log\n\n# Environment\n.env\n.env.local\n\n# Build outputs\ndist/\nbuild/\n\n# IDE\n.vscode/\n.idea/\n\n# OS\n.DS_Store\nThumbs.db`;
+                    } else if (filename === 'CHANGELOG.md') {
+                        template = `# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n## [Unreleased]\n\n### Added\n- Initial release\n\n### Changed\n\n### Fixed\n`;
+                    }
+                    document.getElementById('docsEditorTextarea').value = template;
+                }
+            } catch (error) {
+                console.error('Error loading file:', error);
+                showStatus(`Error loading ${filename}: ${error.message}`, 'error');
+            }
+        }
+
+        async function saveDocsFile() {
+            if (!currentDocsProject || !currentDocsFile) return;
+
+            const content = document.getElementById('docsEditorTextarea').value;
+            const projectDirs = currentDocsProject.directories || (currentDocsProject.working_directory ? [currentDocsProject.working_directory] : []);
+            const projectDir = projectDirs[0];
+            const filePath = `${projectDir}/${currentDocsFile}`;
+
+            try {
+                const response = await fetch(`${getProjectApiUrl()}/write-file`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        file_path: filePath,
+                        content: content
+                    })
+                });
+
+                const data = await response.json();
+
+                if (response.ok) {
+                    showStatus(`✓ Saved ${currentDocsFile}`, 'success');
+                } else {
+                    throw new Error(data.error || 'Failed to save file');
+                }
+            } catch (error) {
+                console.error('Error saving file:', error);
+                showStatus(`Error saving ${currentDocsFile}: ${error.message}`, 'error');
             }
         }
 
