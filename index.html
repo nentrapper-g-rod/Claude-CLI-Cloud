@@ -6886,7 +6886,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                 // Repo button (if repo exists)
                 if (project.repo) {
                     headerHTML += `
-                        <button onclick="openProjectLinkTab('${project.repo.replace(/'/g, "\\'")}', '${project.name.replace(/'/g, "\\'")} - Repo'); event.stopPropagation();"
+                        <button onclick="openProjectLinkTab('${project.repo.replace(/'/g, "\\'")}', '${project.name.replace(/'/g, "\\'")} - Repo', '${(project.github_token || '').replace(/'/g, "\\'")}'); event.stopPropagation();"
                                 style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;"
                                 onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'"
                                 title="Open GitHub repository">
@@ -7646,7 +7646,7 @@ Always add or update the version number on the dashboards or index or scripts wi
 
         // Open code editor for a project
         // Open project link in a tab next to connections
-        function openProjectLinkTab(url, title) {
+        function openProjectLinkTab(url, title, githubToken = '') {
             // Check if it's a GitHub Project URL (e.g., https://github.com/users/username/projects/123 or https://github.com/orgs/orgname/projects/123)
             const projectMatch = url.match(/github\.com\/(users|orgs)\/([^\/]+)\/projects\/(\d+)/);
             if (projectMatch) {
@@ -7662,7 +7662,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             if (repoMatch) {
                 const owner = repoMatch[1];
                 const repo = repoMatch[2].replace(/\.git$/, '').replace(/\/.*$/, ''); // Remove .git and any path
-                openGitHubRepoViewer(owner, repo, title);
+                openGitHubRepoViewer(owner, repo, title, githubToken);
                 return;
             }
 
@@ -7745,7 +7745,7 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // GitHub Repository Viewer
-        async function openGitHubRepoViewer(owner, repo, title) {
+        async function openGitHubRepoViewer(owner, repo, title, githubToken = '') {
             const sessionId = `github_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
             // Create wrapper div
@@ -7764,7 +7764,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                             <p id="repo-description-${sessionId}" style="margin: 5px 0 0 0; color: #888; font-size: 14px;">Loading...</p>
                         </div>
                         <div style="display: flex; gap: 10px;">
-                            <button onclick="loadGitHubRepo('${sessionId}', '${owner}', '${repo}')" style="padding: 8px 16px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">🔄 Refresh</button>
+                            <button onclick="state.topLevelTabs['${sessionId}'].loadRepo()" style="padding: 8px 16px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">🔄 Refresh</button>
                             <a href="https://github.com/${owner}/${repo}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #4a9eff; color: white; text-decoration: none; border-radius: 5px; font-weight: 600;">Open on GitHub →</a>
                         </div>
                     </div>
@@ -7793,23 +7793,33 @@ Always add or update the version number on the dashboards or index or scripts wi
                 title: title,
                 type: 'github',
                 owner: owner,
-                repo: repo
+                repo: repo,
+                githubToken: githubToken,
+                loadRepo: function(path = '') {
+                    loadGitHubRepo(sessionId, owner, repo, path, githubToken);
+                }
             };
 
             // Switch to the new tab
             switchToTopLevelTab(sessionId);
 
             // Load repository data
-            loadGitHubRepo(sessionId, owner, repo);
+            loadGitHubRepo(sessionId, owner, repo, '', githubToken);
         }
 
-        async function loadGitHubRepo(sessionId, owner, repo, path = '') {
+        async function loadGitHubRepo(sessionId, owner, repo, path = '', githubToken = '') {
             const contentDiv = document.getElementById(`repo-content-${sessionId}`);
             const descDiv = document.getElementById(`repo-description-${sessionId}`);
 
             try {
+                // Prepare headers with authentication if token is provided
+                const headers = {};
+                if (githubToken) {
+                    headers['Authorization'] = `token ${githubToken}`;
+                }
+
                 // Fetch repository info
-                const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`);
+                const repoResponse = await fetch(`https://api.github.com/repos/${owner}/${repo}`, { headers });
                 const repoData = await repoResponse.json();
 
                 if (descDiv) {
@@ -7821,7 +7831,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                     ? `https://api.github.com/repos/${owner}/${repo}/contents/${path}`
                     : `https://api.github.com/repos/${owner}/${repo}/contents`;
 
-                const response = await fetch(contentsUrl);
+                const response = await fetch(contentsUrl, { headers });
                 const data = await response.json();
 
                 if (response.status === 403) {
@@ -7833,7 +7843,8 @@ Always add or update the version number on the dashboards or index or scripts wi
                 let html = '';
 
                 if (path) {
-                    html += `<div style="margin-bottom: 15px;"><button onclick="loadGitHubRepo('${sessionId}', '${owner}', '${repo}', '${path.split('/').slice(0, -1).join('/')}')" style="padding: 8px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">⬅️ Back</button></div>`;
+                    const parentPath = path.split('/').slice(0, -1).join('/');
+                    html += `<div style="margin-bottom: 15px;"><button onclick="state.topLevelTabs['${sessionId}'].loadRepo('${parentPath}')" style="padding: 8px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">⬅️ Back</button></div>`;
                 }
 
                 // Sort: directories first, then files
@@ -7848,9 +7859,10 @@ Always add or update the version number on the dashboards or index or scripts wi
 
                 for (const item of items) {
                     const icon = item.type === 'dir' ? '📁' : '📄';
+                    const escapedPath = item.path.replace(/'/g, "\\'");
                     const clickHandler = item.type === 'dir'
-                        ? `loadGitHubRepo('${sessionId}', '${owner}', '${repo}', '${item.path}')`
-                        : `viewGitHubFile('${sessionId}', '${owner}', '${repo}', '${item.path}')`;
+                        ? `state.topLevelTabs['${sessionId}'].loadRepo('${escapedPath}')`
+                        : `viewGitHubFile('${sessionId}', '${owner}', '${repo}', '${escapedPath}', '${githubToken.replace(/'/g, "\\'")}')`;
 
                     html += `
                         <div onclick="${clickHandler}" style="padding: 10px 15px; background: #3a3a3a; border-radius: 5px; cursor: pointer; display: flex; align-items: center; gap: 10px; transition: background 0.2s;" onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'">
@@ -7870,21 +7882,28 @@ Always add or update the version number on the dashboards or index or scripts wi
             }
         }
 
-        async function viewGitHubFile(sessionId, owner, repo, path) {
+        async function viewGitHubFile(sessionId, owner, repo, path, githubToken = '') {
             const contentDiv = document.getElementById(`repo-content-${sessionId}`);
 
             contentDiv.innerHTML = '<div style="text-align: center; color: #888; padding: 40px;">Loading file...</div>';
 
             try {
-                const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`);
+                // Prepare headers with authentication if token is provided
+                const headers = {};
+                if (githubToken) {
+                    headers['Authorization'] = `token ${githubToken}`;
+                }
+
+                const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/contents/${path}`, { headers });
                 const data = await response.json();
 
                 const content = atob(data.content);
                 const language = path.split('.').pop();
+                const parentPath = path.split('/').slice(0, -1).join('/');
 
                 let html = `
                     <div style="margin-bottom: 15px; display: flex; gap: 10px;">
-                        <button onclick="loadGitHubRepo('${sessionId}', '${owner}', '${repo}', '${path.split('/').slice(0, -1).join('/')}')" style="padding: 8px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">⬅️ Back</button>
+                        <button onclick="state.topLevelTabs['${sessionId}'].loadRepo('${parentPath}')" style="padding: 8px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer;">⬅️ Back</button>
                         <div style="padding: 8px 12px; background: #2d2d2d; color: #4a9eff; border-radius: 5px;">📄 ${path.split('/').pop()}</div>
                         <a href="${data.html_url}" target="_blank" style="padding: 8px 12px; background: #4a9eff; color: white; text-decoration: none; border-radius: 5px; margin-left: auto;">View on GitHub</a>
                     </div>
