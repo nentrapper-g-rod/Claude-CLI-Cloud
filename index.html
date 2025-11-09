@@ -6920,7 +6920,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                 // Project button (if link exists)
                 if (project.link) {
                     headerHTML += `
-                        <button onclick="openProjectLinkTab('${project.link.replace(/'/g, "\\'")}', '${project.name.replace(/'/g, "\\'")} - Project'); event.stopPropagation();"
+                        <button onclick="openProjectLinkTab('${project.link.replace(/'/g, "\\'")}', '${project.name.replace(/'/g, "\\'")} - Project', '${(project.github_token || '').replace(/'/g, "\\'")}'); event.stopPropagation();"
                                 style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;"
                                 onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'"
                                 title="Open GitHub project">
@@ -7687,7 +7687,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                 const type = projectMatch[1]; // 'users' or 'orgs'
                 const owner = projectMatch[2];
                 const projectNumber = projectMatch[3];
-                openGitHubProjectViewer(type, owner, projectNumber, title);
+                openGitHubProjectViewer(type, owner, projectNumber, title, githubToken);
                 return;
             }
 
@@ -8287,7 +8287,7 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // GitHub Project V2 Viewer
-        async function openGitHubProjectViewer(type, owner, projectNumber, title) {
+        async function openGitHubProjectViewer(type, owner, projectNumber, title, githubToken = '') {
             const sessionId = `ghproject_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
 
             // Create wrapper div
@@ -8306,7 +8306,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                             <p id="project-description-${sessionId}" style="margin: 5px 0 0 0; color: #888; font-size: 14px;">Loading project...</p>
                         </div>
                         <div style="display: flex; gap: 10px; align-items: center;">
-                            <button onclick="loadGitHubProject('${sessionId}', '${type}', '${owner}', ${projectNumber})" style="padding: 8px 16px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">🔄 Refresh</button>
+                            <button onclick="state.topLevelTabs['${sessionId}'].loadProject()" style="padding: 8px 16px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600;">🔄 Refresh</button>
                             <a href="https://github.com/${type}/${owner}/projects/${projectNumber}" target="_blank" rel="noopener noreferrer" style="padding: 8px 16px; background: #4a9eff; color: white; text-decoration: none; border-radius: 5px; font-weight: 600;">Open on GitHub →</a>
                         </div>
                     </div>
@@ -8349,16 +8349,21 @@ Always add or update the version number on the dashboards or index or scripts wi
                 owner: owner,
                 projectNumber: projectNumber,
                 viewMode: 'list',
-                projectData: null
+                projectData: null,
+                githubToken: githubToken,
+                loadProject: function() {
+                    const token = githubToken || localStorage.getItem('github_token');
+                    loadGitHubProject(sessionId, type, owner, projectNumber, token);
+                }
             };
 
             // Switch to the new tab
             switchToTopLevelTab(sessionId);
 
-            // Auto-load if token exists
-            const existingToken = localStorage.getItem('github_token');
-            if (existingToken) {
-                await loadGitHubProject(sessionId, type, owner, projectNumber, existingToken);
+            // Auto-load if token exists (prefer passed token over localStorage)
+            const tokenToUse = githubToken || localStorage.getItem('github_token');
+            if (tokenToUse) {
+                await loadGitHubProject(sessionId, type, owner, projectNumber, tokenToUse);
             }
         }
 
