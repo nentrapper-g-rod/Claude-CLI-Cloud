@@ -213,18 +213,22 @@ class ConversationDB:
                     # Message already exists, skip it
                     continue
 
-            cursor.execute('''
-                INSERT INTO messages (conversation_id, session_id, message_id, role, content, timestamp, metadata)
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-            ''', (
-                conversation_id,
-                session_id,
-                message_id,
-                role,
-                content,
-                timestamp,
-                json.dumps(msg.get('metadata', {}))
-            ))
+            try:
+                cursor.execute('''
+                    INSERT INTO messages (conversation_id, session_id, message_id, role, content, timestamp, metadata)
+                    VALUES (?, ?, ?, ?, ?, ?, ?)
+                ''', (
+                    conversation_id,
+                    session_id,
+                    message_id,
+                    role,
+                    content,
+                    timestamp,
+                    json.dumps(msg.get('metadata', {}))
+                ))
+            except sqlite3.IntegrityError:
+                # Duplicate message (caught by unique constraint), skip it
+                continue
 
         # Update session message count
         cursor.execute('''

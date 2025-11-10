@@ -4,7 +4,7 @@ Remote Claude CLI Bridge Server (Terminal Mode)
 Purpose: WebSocket server that relays between web UI and actual Claude CLI process
 """
 
-VERSION = "2.14.1"  # Fixed conversation hook config & duplicate message prevention
+VERSION = "2.14.2"  # Performance: Added session list caching (30s TTL), removed per-keystroke DB call
 
 import asyncio
 import websockets
@@ -666,6 +666,8 @@ class ClaudeBridgeTerminalServer:
         self.client_connection_names = {}  # websocket -> connection_name mapping
         self.sessions = {}  # session_id -> ClaudeTerminalSession or ShellSession
         self.session_cache = {}
+        self.session_cache_timestamp = 0  # Track when cache was last updated
+        self.session_cache_ttl = 30  # Cache for 30 seconds
         self.open_tabs = {}  # session_id -> {sessionId, title, projectDir, type}
         self.personal_preferences = ''  # Store synced personal preferences
         self.conversation_monitor = ConversationMonitor(self.claude_home, machine_name, conversation_api_url)
@@ -844,6 +846,14 @@ class ClaudeBridgeTerminalServer:
 
     async def discover_sessions(self) -> Dict:
         """Scan Claude CLI directories and organize sessions"""
+        # Check if cache is still valid
+        current_time = time.time()
+        if (self.session_cache and
+            (current_time - self.session_cache_timestamp) < self.session_cache_ttl):
+            print(f"[{datetime.now().isoformat()}] Returning cached session list (age: {int(current_time - self.session_cache_timestamp)}s)")
+            return self.session_cache
+
+        print(f"[{datetime.now().isoformat()}] Refreshing session list (cache expired or empty)")
         projects_data = {}
         session_metadata = {}
 
@@ -1020,7 +1030,13 @@ class ClaudeBridgeTerminalServer:
 
                 directory.sort(key=get_sort_key, reverse=True)
 
-        return {'projects': projects_data, 'ungrouped': []}
+        # Cache the result
+        result = {'projects': projects_data, 'ungrouped': []}
+        self.session_cache = result
+        self.session_cache_timestamp = time.time()
+        print(f"[{datetime.now().isoformat()}] Session list cached ({len(projects_data)} projects)")
+
+        return result
 
     async def get_session_preview(self, session_file: Path) -> str:
         """Extract preview text from session file"""
@@ -1733,9 +1749,8 @@ class ClaudeBridgeTerminalServer:
 
         terminal = self.sessions[session_id]
 
-        # Save user input to conversation database (skip shell sessions)
-        if input_text.strip() and not isinstance(terminal, ShellSession):
-            self.save_conversation_to_db(session_id, input_text, role='user')
+        # Note: Conversation logging now handled by Claude CLI hooks (not here)
+        # Removed per-keystroke save_conversation_to_db call for better performance
 
         await terminal.write_input(input_text)
 

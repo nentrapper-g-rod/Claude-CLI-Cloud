@@ -14,13 +14,42 @@ import urllib.request
 import urllib.error
 
 # Add the path to conversation_db module
-sys.path.insert(0, str(Path.home() / '.claude-bridge'))
+sys.path.insert(0, '/opt/Claude-CLI-Cloud')
 
 # Central server for conversation aggregation
 CENTRAL_SERVER = os.environ.get('CLAUDE_CENTRAL_SERVER', 'http://100.94.187.56:8891')
 
+def is_central_server():
+    """Check if this machine IS the central server to avoid duplicate writes"""
+    import socket
+    try:
+        # Get all local IP addresses
+        hostname = socket.gethostname()
+        local_ips = socket.gethostbyname_ex(hostname)[2]
+
+        # Extract IP from CENTRAL_SERVER URL
+        server_host = CENTRAL_SERVER.split('://')[1].split(':')[0]
+
+        # If central server is localhost or matches our IP, we ARE the central server
+        if server_host in ['localhost', '127.0.0.1'] or server_host in local_ips:
+            return True
+
+        # Also check via socket connection to get all interfaces
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        our_ip = s.getsockname()[0]
+        s.close()
+
+        return server_host == our_ip
+    except:
+        return False
+
 def send_to_central_server(session_data):
-    """Send session data to central server for aggregation"""
+    """Send session data to central server for aggregation (only from remote clients)"""
+    # Don't send to central server if WE ARE the central server (prevents duplicates)
+    if is_central_server():
+        return None
+
     try:
         data = json.dumps(session_data).encode('utf-8')
         req = urllib.request.Request(
@@ -33,7 +62,7 @@ def send_to_central_server(session_data):
             return response.read()
     except Exception as e:
         # Log but don't fail - local DB is primary
-        debug_log = Path.home() / '.claude-bridge' / 'hook-debug.log'
+        debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
         with open(debug_log, 'a') as f:
             f.write(f"[{datetime.now().isoformat()}] Failed to send to central server: {e}\n")
         return None
@@ -45,7 +74,7 @@ try:
     hook_data = json.load(sys.stdin)
 
     # Debug logging
-    debug_log = Path.home() / '.claude-bridge' / 'hook-debug.log'
+    debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
     with open(debug_log, 'a') as f:
         f.write(f"\n[{datetime.now().isoformat()}] Hook event: {hook_data.get('hook_event_name')}\n")
         f.write(f"Hook data: {json.dumps(hook_data, indent=2)}\n")
