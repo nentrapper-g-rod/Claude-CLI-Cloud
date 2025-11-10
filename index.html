@@ -6322,7 +6322,7 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Conversation History API URL
-        const CONVERSATION_API_URL = `http://${window.location.hostname}:8887/api`;
+        const CONVERSATION_API_URL = `http://${window.location.hostname}:8891/api`;
 
         // Load conversation history
         async function loadConversationHistory(searchQuery = null, connectionName = null) {
@@ -6330,8 +6330,8 @@ Always add or update the version number on the dashboards or index or scripts wi
             historyList.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">Loading...</div>';
 
             try {
-                // Use the HTTP API on port 8887 instead
-                const apiUrl = `http://${window.location.hostname}:8887/api/sessions/grouped`;
+                // Use the HTTP API on port 8891 (central conversation server)
+                const apiUrl = `http://${window.location.hostname}:8891/api/sessions/grouped`;
 
                 const response = await fetch(apiUrl);
                 if (!response.ok) {

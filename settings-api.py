@@ -174,6 +174,63 @@ class SettingsAPI:
             traceback.print_exc()
             return web.json_response({'error': str(e)}, status=500)
 
+    async def handle_sessions_grouped(self, request):
+        """Get sessions grouped by connection and project directory"""
+        try:
+            if not self.db:
+                return web.json_response({'error': 'Database not available'}, status=500)
+
+            sessions = self.db.get_sessions(connection_name=None, limit=10000)
+
+            # Group by connection_name and project
+            grouped = {}
+            for session in sessions:
+                conn = session['connection_name']
+                project = session.get('project') or session.get('cwd') or 'Unknown'
+
+                if conn not in grouped:
+                    grouped[conn] = {}
+
+                if project not in grouped[conn]:
+                    grouped[conn][project] = []
+
+                grouped[conn][project].append({
+                    'session_id': session['session_id'],
+                    'connection_name': conn,
+                    'project': project,
+                    'cwd': session.get('cwd'),
+                    'created_at': session.get('created_at'),
+                    'last_modified': session.get('last_modified'),
+                    'message_count': session.get('message_count', 0)
+                })
+
+            return web.json_response(grouped)
+
+        except Exception as e:
+            print(f"Error getting grouped sessions: {e}")
+            import traceback
+            traceback.print_exc()
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_get_session_messages(self, request):
+        """Get messages for a specific session"""
+        try:
+            if not self.db:
+                return web.json_response({'error': 'Database not available'}, status=500)
+
+            session_id = request.match_info.get('session_id')
+            if not session_id:
+                return web.json_response({'error': 'Missing session_id'}, status=400)
+
+            messages = self.db.get_session_messages(session_id, limit=10000)
+            return web.json_response({'messages': messages})
+
+        except Exception as e:
+            print(f"Error getting session messages: {e}")
+            import traceback
+            traceback.print_exc()
+            return web.json_response({'error': str(e)}, status=500)
+
     def create_app(self):
         """Create and configure the web application"""
         app = web.Application()
@@ -185,6 +242,8 @@ class SettingsAPI:
         app.router.add_post('/api/conversations/sync', self.handle_sync_conversation)
         app.router.add_get('/api/conversations/query', self.handle_query_session)
         app.router.add_get('/api/conversations/stats', self.handle_query_stats)
+        app.router.add_get('/api/sessions/grouped', self.handle_sessions_grouped)
+        app.router.add_get('/api/conversations/{session_id}', self.handle_get_session_messages)
 
         # Add CORS middleware
         async def cors_middleware(app, handler):

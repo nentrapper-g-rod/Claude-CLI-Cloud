@@ -185,9 +185,12 @@ class ConversationDB:
             ''', (session_id, connection_name, project, cwd))
             conversation_id = cursor.lastrowid
 
-        # Insert messages (skip duplicates based on message_id)
+        # Insert messages (skip duplicates based on message_id or timestamp+content)
         for msg in messages:
             message_id = msg.get('message_id')
+            timestamp = msg.get('timestamp', datetime.now().isoformat())
+            content = msg.get('content', '')
+            role = msg.get('role', 'unknown')
 
             # Check if message already exists
             if message_id:
@@ -195,6 +198,16 @@ class ConversationDB:
                     SELECT id FROM messages
                     WHERE session_id = ? AND message_id = ?
                 ''', (session_id, message_id))
+
+                if cursor.fetchone():
+                    # Message already exists, skip it
+                    continue
+            else:
+                # No message_id, check by timestamp and content
+                cursor.execute('''
+                    SELECT id FROM messages
+                    WHERE session_id = ? AND timestamp = ? AND content = ? AND role = ?
+                ''', (session_id, timestamp, content, role))
 
                 if cursor.fetchone():
                     # Message already exists, skip it
@@ -207,9 +220,9 @@ class ConversationDB:
                 conversation_id,
                 session_id,
                 message_id,
-                msg.get('role', 'unknown'),
-                msg.get('content', ''),
-                msg.get('timestamp', datetime.now().isoformat()),
+                role,
+                content,
+                timestamp,
                 json.dumps(msg.get('metadata', {}))
             ))
 

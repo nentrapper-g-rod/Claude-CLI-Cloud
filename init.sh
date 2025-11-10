@@ -1,5 +1,5 @@
 #!/bin/bash
-# v2.6 – MCP config removed (handled by install script)
+# v2.7 – Added conversation hook setup
 
 # Download personal preferences (fast)
 mkdir -p ~/.claude-bridge
@@ -31,6 +31,33 @@ with open(settings_file, 'w') as f:
 EOF
 fi
 
+# Ensure conversation hooks are configured in config.json
+python3 <<'EOF' 2>/dev/null
+import json
+import os
+
+config_file = os.path.expanduser('~/.claude/config.json')
+
+# Read existing config
+if os.path.exists(config_file):
+    with open(config_file, 'r') as f:
+        config = json.load(f)
+else:
+    config = {}
+
+# Add hooks if not present or pointing to wrong location
+hook_path = os.path.expanduser('~/.claude-bridge/conversation-hook.py')
+if 'hooks' not in config or not config['hooks'] or config['hooks'].get('stop') != hook_path:
+    config['hooks'] = {
+        'user_prompt_submit': hook_path,
+        'stop': hook_path
+    }
+
+    # Write back to file
+    with open(config_file, 'w') as f:
+        json.dump(config, f, indent=2)
+EOF
+
 # Run slow operations in background (non-blocking)
 (
     # Set Claude UI preferences (only if not already set)
@@ -42,4 +69,4 @@ fi
     fi
 ) &
 
-echo "✓ Init script v2.6 completed"
+echo "✓ Init script v2.7 completed"
