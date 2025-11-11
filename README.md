@@ -9,6 +9,7 @@ A web-based chat interface that allows you to chat with Claude in a browser whil
 - 🌐 **Web-Based Interface**: Chat with Claude from any browser
 - 🖥️ **Multi-Machine Support**: Connect and switch between multiple remote machines
 - 🪟 **Windows Support**: Full Windows bridge server support with automated installer
+- 🔌 **MCP Tools & AI Context Server**: Multi-mode context server (in development) for intelligent session and project awareness
 - 📁 **Session Discovery**: Automatically find and organize existing Claude CLI sessions
 - 🗂️ **Project Organization**: Sessions grouped by project and directory
 - ⚡ **Real-Time Streaming**: See Claude's responses as they're generated
@@ -554,6 +555,96 @@ pip3 install websockets anthropic aiofiles
 4. **Tool Execution**: Tool use is display-only, not interactive
 5. **Multiple Clients**: Each client maintains separate WebSocket connection
 
+## MCP Tools & AI Context Server (In Development)
+
+🚧 **Work in Progress**: We're developing an advanced MCP (Model Context Protocol) Tools & Server system that provides AI context across multiple operational modes.
+
+### Overview
+
+The MCP integration extends Claude CLI Cloud with intelligent context management, allowing Claude to access conversation history, session metadata, and project information through a standardized protocol.
+
+### Planned Features
+
+#### **AI Context Server with Multiple Modes:**
+
+1. **Conversation History Mode**
+   - Access to full conversation history across all sessions
+   - Search and retrieve past conversations by content, date, or project
+   - Semantic search across conversation databases
+   - Session analytics and insights
+
+2. **Project Context Mode**
+   - Automatic project detection and context switching
+   - Project-specific memory and preferences
+   - Working directory awareness
+   - Git repository integration
+
+3. **Session Management Mode**
+   - Create, load, and manage sessions programmatically
+   - Session tagging and organization
+   - Favorite and pin important sessions
+   - Session threading and continuation tracking
+
+4. **File Context Mode**
+   - Access to project file structure
+   - Read and analyze files within working directories
+   - File version history tracking
+   - Intelligent file recommendations
+
+5. **System Information Mode**
+   - Machine-specific context (CPU, memory, disk usage)
+   - Process monitoring and management
+   - Network connectivity status
+   - Environment variable access
+
+### Current MCP Components
+
+The following MCP components are already available:
+
+- **conversation-mcp-server.py**: MCP server for conversation history access
+- **conversation_db.py**: SQLite database for session metadata and favorites
+- **conversation-hook.py**: Hooks for tracking conversation events
+
+### MCP Configuration
+
+MCP servers are configured in `~/.config/claude/mcp_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "conversation-history": {
+      "command": "python",
+      "args": ["/path/to/conversation-mcp-server.py"],
+      "env": {
+        "CONNECTION_NAME": "Machine Name"
+      }
+    }
+  }
+}
+```
+
+### Benefits
+
+- **Context Continuity**: Claude maintains awareness across sessions and projects
+- **Intelligent Retrieval**: Find relevant past conversations automatically
+- **Project Intelligence**: Context-aware responses based on project structure
+- **Enhanced Productivity**: Reduced need to manually provide context
+- **Multi-Mode Flexibility**: Switch between different context modes as needed
+
+### Roadmap
+
+- [x] Basic conversation history MCP server
+- [x] Session metadata database
+- [x] Favorite sessions support
+- [ ] Advanced semantic search
+- [ ] Multi-mode context switching
+- [ ] Real-time context streaming
+- [ ] Project-aware recommendations
+- [ ] System monitoring integration
+- [ ] Custom context plugins
+
+For more information on MCP, see: [Model Context Protocol Documentation](https://modelcontextprotocol.io/)
+
 ## Future Enhancements
 
 - [ ] Add authentication system
@@ -567,7 +658,7 @@ pip3 install websockets anthropic aiofiles
 - [ ] Mobile-responsive design improvements
 - [ ] Session sharing between users
 - [ ] Real-time collaboration
-- [ ] MCP server integration
+- [ ] Complete MCP multi-mode context server
 - [ ] Slash commands support
 
 ## Version History
