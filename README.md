@@ -18,168 +18,6 @@ A web-based chat interface that allows you to chat with Claude in a browser whil
 - 💾 **Session Continuity**: Load and continue existing conversations
 - 🔍 **Search & Filter**: Quickly find sessions across all your projects
 
-## Architecture
-
-```
-Web Browser (Chat UI)
-    ↓ WebSocket
-Bridge Server (Python)
-    ↓ Anthropic API
-Claude AI
-    ↓ Session Storage
-~/.claude/ (Claude CLI Home)
-```
-
-## Requirements
-
-### Bridge Server (Remote Machine)
-
-- Python 3.7 or higher
-- Claude CLI installed (optional, for session discovery)
-- Anthropic API key
-- **Windows Support**: Includes PowerShell installer for Windows machines
-
-### Web Interface (Your Computer)
-
-- Modern web browser (Chrome, Firefox, Safari, Edge)
-- Network access to bridge server machines
-
-## Installation
-
-### 1. Set Up Bridge Server on Remote Machines
-
-#### Linux/macOS Installation
-
-On each Linux or macOS machine you want to connect to:
-
-```bash
-# Navigate to project directory
-cd /opt/Claude-CLI-Cloud
-
-# Install Python dependencies
-pip install anthropic aiofiles websockets
-
-# Or use pip3 if needed
-pip3 install anthropic aiofiles websockets
-```
-
-#### Windows Installation
-
-On Windows machines, use the automated PowerShell installer:
-
-```powershell
-# Run PowerShell as Administrator
-# Set execution policy for this session
-Set-ExecutionPolicy Bypass -Scope Process -Force
-
-# Set source server (Linux/macOS machine hosting the files)
-$env:SOURCE_SERVER="http://YOUR_SERVER_IP:8890"
-
-# Run installer
-.\install-bridge.ps1
-```
-
-The Windows installer will:
-- Download the bridge server from your source machine
-- Install Python dependencies (websockets, aiofiles, psutil, aiohttp, mcp, pywinpty)
-- Create a Windows Service or Scheduled Task to run at startup
-- Configure MCP server integration (optional)
-- Set up firewall rules (if needed)
-
-**Manual Windows Installation:**
-
-```powershell
-# Install Python dependencies
-python -m pip install websockets aiofiles psutil aiohttp mcp pywinpty
-
-# Or manually download and place files in:
-# C:\ProgramData\claude-bridge\
-```
-
-### 2. Configure API Key
-
-Set your Anthropic API key as an environment variable:
-
-```bash
-# Add to your .bashrc or .zshrc for persistence
-export ANTHROPIC_API_KEY="your-api-key-here"
-
-# Or pass it as a command-line argument when starting the server
-```
-
-### 3. Start Bridge Server
-
-#### Linux/macOS
-
-```bash
-# Basic usage
-python3 claude-bridge-server-terminal.py --machine-name "My Machine"
-
-# With custom port
-python3 claude-bridge-server-terminal.py --machine-name "Work Laptop" --port 8766
-
-# With custom host (bind to specific IP)
-python3 claude-bridge-server-terminal.py --machine-name "Server" --host 192.168.1.100 --port 8766
-
-# With API key as argument
-python3 claude-bridge-server-terminal.py --machine-name "Server" --api-key "your-key"
-
-# With custom Claude home directory
-python3 claude-bridge-server-terminal.py --machine-name "Server" --claude-home "/custom/path/.claude"
-```
-
-#### Windows
-
-If you used the PowerShell installer, the bridge server is already running as a service. To manage it:
-
-```powershell
-# Check service status (if using NSSM)
-nssm status ClaudeBridge
-
-# Or check scheduled task (if using Task Scheduler)
-Get-ScheduledTask -TaskName ClaudeBridge | Get-ScheduledTaskInfo
-
-# Stop service
-nssm stop ClaudeBridge
-# Or: Stop-ScheduledTask -TaskName ClaudeBridge
-
-# Start service
-nssm start ClaudeBridge
-# Or: Start-ScheduledTask -TaskName ClaudeBridge
-
-# View logs
-Get-Content C:\ProgramData\claude-bridge\bridge.log -Wait
-```
-
-**Manual Windows Start:**
-
-```powershell
-# Basic usage
-python claude-bridge-server-terminal.py --machine-name "My Windows PC"
-
-# With custom port
-python claude-bridge-server-terminal.py --machine-name "Windows Laptop" --port 8766
-```
-
-**Command-Line Arguments:**
-
-- `--machine-name` (required): Friendly name for this machine
-- `--host` (default: 0.0.0.0): Host to bind to
-- `--port` (default: 8765): Port to listen on
-- `--api-key` (optional): Anthropic API key (or use ANTHROPIC_API_KEY env var)
-- `--claude-home` (default: ~/.claude): Claude CLI home directory
-
-### 4. Open Web Interface
-
-```bash
-# Option 1: Open directly in browser
-open index.html
-
-# Option 2: Serve via HTTP server (if needed)
-python3 -m http.server 8080
-# Then visit: http://localhost:8080
-```
-
 ## User Interface Overview
 
 ### Main Interface
@@ -360,6 +198,168 @@ Automated bridge server deployment with platform-specific installers:
 After installation, bridge server runs as a system service:
 - **Linux**: `systemctl status claude-bridge`
 - **Windows**: `nssm status ClaudeBridge` or Task Scheduler
+
+## Architecture
+
+```
+Web Browser (Chat UI)
+    ↓ WebSocket
+Bridge Server (Python)
+    ↓ Anthropic API
+Claude AI
+    ↓ Session Storage
+~/.claude/ (Claude CLI Home)
+```
+
+## Requirements
+
+### Bridge Server (Remote Machine)
+
+- Python 3.7 or higher
+- Claude CLI installed (optional, for session discovery)
+- Anthropic API key
+- **Windows Support**: Includes PowerShell installer for Windows machines
+
+### Web Interface (Your Computer)
+
+- Modern web browser (Chrome, Firefox, Safari, Edge)
+- Network access to bridge server machines
+
+## Installation
+
+### 1. Set Up Bridge Server on Remote Machines
+
+#### Linux/macOS Installation
+
+On each Linux or macOS machine you want to connect to:
+
+```bash
+# Navigate to project directory
+cd /opt/Claude-CLI-Cloud
+
+# Install Python dependencies
+pip install anthropic aiofiles websockets
+
+# Or use pip3 if needed
+pip3 install anthropic aiofiles websockets
+```
+
+#### Windows Installation
+
+On Windows machines, use the automated PowerShell installer:
+
+```powershell
+# Run PowerShell as Administrator
+# Set execution policy for this session
+Set-ExecutionPolicy Bypass -Scope Process -Force
+
+# Set source server (Linux/macOS machine hosting the files)
+$env:SOURCE_SERVER="http://YOUR_SERVER_IP:8890"
+
+# Run installer
+.\install-bridge.ps1
+```
+
+The Windows installer will:
+- Download the bridge server from your source machine
+- Install Python dependencies (websockets, aiofiles, psutil, aiohttp, mcp, pywinpty)
+- Create a Windows Service or Scheduled Task to run at startup
+- Configure MCP server integration (optional)
+- Set up firewall rules (if needed)
+
+**Manual Windows Installation:**
+
+```powershell
+# Install Python dependencies
+python -m pip install websockets aiofiles psutil aiohttp mcp pywinpty
+
+# Or manually download and place files in:
+# C:\ProgramData\claude-bridge\
+```
+
+### 2. Configure API Key
+
+Set your Anthropic API key as an environment variable:
+
+```bash
+# Add to your .bashrc or .zshrc for persistence
+export ANTHROPIC_API_KEY="your-api-key-here"
+
+# Or pass it as a command-line argument when starting the server
+```
+
+### 3. Start Bridge Server
+
+#### Linux/macOS
+
+```bash
+# Basic usage
+python3 claude-bridge-server-terminal.py --machine-name "My Machine"
+
+# With custom port
+python3 claude-bridge-server-terminal.py --machine-name "Work Laptop" --port 8766
+
+# With custom host (bind to specific IP)
+python3 claude-bridge-server-terminal.py --machine-name "Server" --host 192.168.1.100 --port 8766
+
+# With API key as argument
+python3 claude-bridge-server-terminal.py --machine-name "Server" --api-key "your-key"
+
+# With custom Claude home directory
+python3 claude-bridge-server-terminal.py --machine-name "Server" --claude-home "/custom/path/.claude"
+```
+
+#### Windows
+
+If you used the PowerShell installer, the bridge server is already running as a service. To manage it:
+
+```powershell
+# Check service status (if using NSSM)
+nssm status ClaudeBridge
+
+# Or check scheduled task (if using Task Scheduler)
+Get-ScheduledTask -TaskName ClaudeBridge | Get-ScheduledTaskInfo
+
+# Stop service
+nssm stop ClaudeBridge
+# Or: Stop-ScheduledTask -TaskName ClaudeBridge
+
+# Start service
+nssm start ClaudeBridge
+# Or: Start-ScheduledTask -TaskName ClaudeBridge
+
+# View logs
+Get-Content C:\ProgramData\claude-bridge\bridge.log -Wait
+```
+
+**Manual Windows Start:**
+
+```powershell
+# Basic usage
+python claude-bridge-server-terminal.py --machine-name "My Windows PC"
+
+# With custom port
+python claude-bridge-server-terminal.py --machine-name "Windows Laptop" --port 8766
+```
+
+**Command-Line Arguments:**
+
+- `--machine-name` (required): Friendly name for this machine
+- `--host` (default: 0.0.0.0): Host to bind to
+- `--port` (default: 8765): Port to listen on
+- `--api-key` (optional): Anthropic API key (or use ANTHROPIC_API_KEY env var)
+- `--claude-home` (default: ~/.claude): Claude CLI home directory
+
+### 4. Open Web Interface
+
+```bash
+# Option 1: Open directly in browser
+open index.html
+
+# Option 2: Serve via HTTP server (if needed)
+python3 -m http.server 8080
+# Then visit: http://localhost:8080
+```
 
 ## Usage Guide
 
