@@ -8,6 +8,7 @@ A web-based chat interface that allows you to chat with Claude in a browser whil
 
 - 🌐 **Web-Based Interface**: Chat with Claude from any browser
 - 🖥️ **Multi-Machine Support**: Connect and switch between multiple remote machines
+- 🪟 **Windows Support**: Full Windows bridge server support with automated installer
 - 📁 **Session Discovery**: Automatically find and organize existing Claude CLI sessions
 - 🗂️ **Project Organization**: Sessions grouped by project and directory
 - ⚡ **Real-Time Streaming**: See Claude's responses as they're generated
@@ -35,6 +36,7 @@ Claude AI
 - Python 3.7 or higher
 - Claude CLI installed (optional, for session discovery)
 - Anthropic API key
+- **Windows Support**: Includes PowerShell installer for Windows machines
 
 ### Web Interface (Your Computer)
 
@@ -45,7 +47,9 @@ Claude AI
 
 ### 1. Set Up Bridge Server on Remote Machines
 
-On each machine you want to connect to:
+#### Linux/macOS Installation
+
+On each Linux or macOS machine you want to connect to:
 
 ```bash
 # Navigate to project directory
@@ -56,6 +60,39 @@ pip install anthropic aiofiles websockets
 
 # Or use pip3 if needed
 pip3 install anthropic aiofiles websockets
+```
+
+#### Windows Installation
+
+On Windows machines, use the automated PowerShell installer:
+
+```powershell
+# Run PowerShell as Administrator
+# Set execution policy for this session
+Set-ExecutionPolicy Bypass -Scope Process -Force
+
+# Set source server (Linux/macOS machine hosting the files)
+$env:SOURCE_SERVER="http://YOUR_SERVER_IP:8890"
+
+# Run installer
+.\install-bridge.ps1
+```
+
+The Windows installer will:
+- Download the bridge server from your source machine
+- Install Python dependencies (websockets, aiofiles, psutil, aiohttp, mcp, pywinpty)
+- Create a Windows Service or Scheduled Task to run at startup
+- Configure MCP server integration (optional)
+- Set up firewall rules (if needed)
+
+**Manual Windows Installation:**
+
+```powershell
+# Install Python dependencies
+python -m pip install websockets aiofiles psutil aiohttp mcp pywinpty
+
+# Or manually download and place files in:
+# C:\ProgramData\claude-bridge\
 ```
 
 ### 2. Configure API Key
@@ -71,21 +108,56 @@ export ANTHROPIC_API_KEY="your-api-key-here"
 
 ### 3. Start Bridge Server
 
+#### Linux/macOS
+
 ```bash
 # Basic usage
-python3 claude-bridge-server.py --machine-name "My Machine"
+python3 claude-bridge-server-terminal.py --machine-name "My Machine"
 
 # With custom port
-python3 claude-bridge-server.py --machine-name "Work Laptop" --port 8765
+python3 claude-bridge-server-terminal.py --machine-name "Work Laptop" --port 8766
 
 # With custom host (bind to specific IP)
-python3 claude-bridge-server.py --machine-name "Server" --host 192.168.1.100 --port 8765
+python3 claude-bridge-server-terminal.py --machine-name "Server" --host 192.168.1.100 --port 8766
 
 # With API key as argument
-python3 claude-bridge-server.py --machine-name "Server" --api-key "your-key"
+python3 claude-bridge-server-terminal.py --machine-name "Server" --api-key "your-key"
 
 # With custom Claude home directory
-python3 claude-bridge-server.py --machine-name "Server" --claude-home "/custom/path/.claude"
+python3 claude-bridge-server-terminal.py --machine-name "Server" --claude-home "/custom/path/.claude"
+```
+
+#### Windows
+
+If you used the PowerShell installer, the bridge server is already running as a service. To manage it:
+
+```powershell
+# Check service status (if using NSSM)
+nssm status ClaudeBridge
+
+# Or check scheduled task (if using Task Scheduler)
+Get-ScheduledTask -TaskName ClaudeBridge | Get-ScheduledTaskInfo
+
+# Stop service
+nssm stop ClaudeBridge
+# Or: Stop-ScheduledTask -TaskName ClaudeBridge
+
+# Start service
+nssm start ClaudeBridge
+# Or: Start-ScheduledTask -TaskName ClaudeBridge
+
+# View logs
+Get-Content C:\ProgramData\claude-bridge\bridge.log -Wait
+```
+
+**Manual Windows Start:**
+
+```powershell
+# Basic usage
+python claude-bridge-server-terminal.py --machine-name "My Windows PC"
+
+# With custom port
+python claude-bridge-server-terminal.py --machine-name "Windows Laptop" --port 8766
 ```
 
 **Command-Line Arguments:**
