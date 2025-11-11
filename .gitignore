@@ -30,6 +30,12 @@ connections.json
 preferences.json
 server-config.json
 
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+conversations.db
+
 # Node modules (if any)
 node_modules/
 

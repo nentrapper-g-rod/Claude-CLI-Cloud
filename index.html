@@ -1046,10 +1046,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="editProjectGitExcludeInput">Git Exclusions (optional):</label>
-                    <textarea id="editProjectGitExcludeInput" rows="4" placeholder="node_modules&#10;*.log&#10;.env&#10;dist&#10;*-env" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
+                    <label for="editProjectGitExcludeInput">Git Exclusions (optional):
+                        <button type="button" onclick="fillDefaultGitExclusions('editProjectGitExcludeInput')" style="margin-left: 10px; padding: 4px 8px; background: #3a9e3a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Use Defaults</button>
+                    </label>
+                    <textarea id="editProjectGitExcludeInput" rows="8" placeholder="# Dependencies&#10;node_modules/&#10;venv/&#10;env/&#10;&#10;# Secrets&#10;.env&#10;.env.*&#10;*.key&#10;*.pem&#10;*secret*&#10;*credentials*&#10;&#10;# Databases&#10;*.db&#10;*.sqlite&#10;*.sqlite3&#10;&#10;# Logs&#10;*.log&#10;logs/&#10;&#10;# Build outputs&#10;dist/&#10;build/&#10;*.pyc&#10;__pycache__/&#10;&#10;# Config&#10;connections.json&#10;server-config.json&#10;preferences.json" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
                     <div style="margin-top: 4px; font-size: 11px; color: #888;">
-                        Files and directories to exclude from git push (one per line). These will be added to .gitignore during push.
+                        Files and directories to exclude from git push (one per line). These will be added to .gitignore during push. Lines starting with # are comments.
                     </div>
                 </div>
                 <div class="form-group">
@@ -1128,10 +1130,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     </div>
                 </div>
                 <div class="form-group">
-                    <label for="projectGitExcludeInput">Git Exclusions (optional):</label>
-                    <textarea id="projectGitExcludeInput" rows="4" placeholder="node_modules&#10;*.log&#10;.env&#10;dist&#10;*-env" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
+                    <label for="projectGitExcludeInput">Git Exclusions (optional):
+                        <button type="button" onclick="fillDefaultGitExclusions('projectGitExcludeInput')" style="margin-left: 10px; padding: 4px 8px; background: #3a9e3a; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px;">Use Defaults</button>
+                    </label>
+                    <textarea id="projectGitExcludeInput" rows="8" placeholder="# Dependencies&#10;node_modules/&#10;venv/&#10;env/&#10;&#10;# Secrets&#10;.env&#10;.env.*&#10;*.key&#10;*.pem&#10;*secret*&#10;*credentials*&#10;&#10;# Databases&#10;*.db&#10;*.sqlite&#10;*.sqlite3&#10;&#10;# Logs&#10;*.log&#10;logs/&#10;&#10;# Build outputs&#10;dist/&#10;build/&#10;*.pyc&#10;__pycache__/&#10;&#10;# Config&#10;connections.json&#10;server-config.json&#10;preferences.json" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: 'Courier New', monospace; font-size: 12px;"></textarea>
                     <div style="margin-top: 4px; font-size: 11px; color: #888;">
-                        Files and directories to exclude from git push (one per line). These will be added to .gitignore during push.
+                        Files and directories to exclude from git push (one per line). These will be added to .gitignore during push. Lines starting with # are comments.
                     </div>
                 </div>
                 <div class="form-group">
@@ -7945,7 +7949,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                         repo,
                         github_token: githubToken,
                         link,
-                        git_exclude: gitExclude ? gitExclude.split('\n').map(s => s.trim()).filter(s => s) : [],
+                        git_exclude: gitExclude ? gitExclude.split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('#')) : [],
                         exclude_large_files: excludeLargeFiles,
                         directories,
                         connection_index: connectionIndex !== '' ? parseInt(connectionIndex) : null,
@@ -7985,6 +7989,72 @@ Always add or update the version number on the dashboards or index or scripts wi
             document.getElementById('createProjectForm').reset();
         }
 
+        // Fill default git exclusions
+        function fillDefaultGitExclusions(fieldId) {
+            const defaultExclusions = `# Dependencies
+node_modules/
+venv/
+env/
+ENV/
+
+# Secrets & Credentials
+.env
+.env.*
+*.key
+*.pem
+*secret*
+*credentials*
+*.token
+
+# Databases
+*.db
+*.sqlite
+*.sqlite3
+conversations.db
+
+# Logs
+*.log
+logs/
+bridge.log
+
+# Build outputs
+dist/
+build/
+*.pyc
+__pycache__/
+*.o
+*.so
+
+# Configuration
+connections.json
+server-config.json
+preferences.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+*~`;
+
+            const textarea = document.getElementById(fieldId);
+            if (textarea) {
+                // If textarea is empty, fill it; otherwise, append to existing content
+                if (textarea.value.trim() === '') {
+                    textarea.value = defaultExclusions;
+                } else {
+                    if (!confirm('This will replace the current exclusions. Continue?')) {
+                        return;
+                    }
+                    textarea.value = defaultExclusions;
+                }
+            }
+        }
+
         // Create project via HTTP API
         async function createProject(event) {
             event.preventDefault();
@@ -8017,7 +8087,7 @@ Always add or update the version number on the dashboards or index or scripts wi
                         repo,
                         github_token: githubToken,
                         link,
-                        git_exclude: gitExclude ? gitExclude.split('\n').map(s => s.trim()).filter(s => s) : [],
+                        git_exclude: gitExclude ? gitExclude.split('\n').map(s => s.trim()).filter(s => s && !s.startsWith('#')) : [],
                         exclude_large_files: excludeLargeFiles,
                         color
                     })
