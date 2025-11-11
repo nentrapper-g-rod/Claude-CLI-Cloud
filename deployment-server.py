@@ -24,13 +24,15 @@ def get_bridge_version():
 SERVED_FILES = {
     '/download/claude-bridge-server-terminal.py': 'claude-bridge-server-terminal.py',
     '/download/install-bridge.sh': 'install-bridge.sh',
+    '/download/install-bridge.ps1': 'install-bridge.ps1',
     '/download/conversation-mcp-server.py': 'conversation-mcp-server.py',
     '/download/conversation_db.py': 'conversation_db.py',
     '/download/conversation-hook.py': 'conversation-hook.py',
     '/download/install-mcp-config.sh': 'install-mcp-config.sh',
     '/download/check-remote-sync.sh': 'check-remote-sync.sh',
     '/download/claude-with-connection-name.sh': 'claude-with-connection-name.sh',
-    '/install': 'install-bridge.sh',  # Shortcut URL
+    '/install': 'install-bridge.sh',  # Shortcut URL for Linux
+    '/install-windows': 'install-bridge.ps1',  # Shortcut URL for Windows
 }
 
 class DeploymentHandler(BaseHTTPRequestHandler):
@@ -48,6 +50,8 @@ class DeploymentHandler(BaseHTTPRequestHandler):
                     self.send_header('Content-Type', 'text/x-python')
                 elif filename.endswith('.sh'):
                     self.send_header('Content-Type', 'text/x-shellscript')
+                elif filename.endswith('.ps1'):
+                    self.send_header('Content-Type', 'text/x-powershell')
                 else:
                     self.send_header('Content-Type', 'application/octet-stream')
 
@@ -81,6 +85,8 @@ class DeploymentHandler(BaseHTTPRequestHandler):
                     self.send_header('Content-Type', 'text/x-python')
                 elif filename.endswith('.sh'):
                     self.send_header('Content-Type', 'text/x-shellscript')
+                elif filename.endswith('.ps1'):
+                    self.send_header('Content-Type', 'text/x-powershell')
                 else:
                     self.send_header('Content-Type', 'application/octet-stream')
 
@@ -146,13 +152,13 @@ class DeploymentHandler(BaseHTTPRequestHandler):
             <body>
                 <h1>🚀 Claude CLI Bridge Deployment <span class="version">v{version}</span></h1>
 
-                <h2>Quick Install (One Command)</h2>
-                <p>Run this command on your target server:</p>
+                <h2>🐧 Linux Installation</h2>
+                <p><strong>Quick Install (One Command):</strong></p>
                 <div class="command">
                     <code>curl -fsSL http://{self.headers.get('Host', 'SERVER_IP')}/install | SOURCE_SERVER=http://{self.headers.get('Host', 'SERVER_IP')} bash</code>
                 </div>
 
-                <h2>Manual Install</h2>
+                <p><strong>Manual Install:</strong></p>
                 <p>1. Download installer:</p>
                 <div class="command">
                     <code>curl -O http://{self.headers.get('Host', 'SERVER_IP')}/download/install-bridge.sh</code>
@@ -164,9 +170,29 @@ class DeploymentHandler(BaseHTTPRequestHandler):
                     SOURCE_SERVER=http://{self.headers.get('Host', 'SERVER_IP')} ./install-bridge.sh</code>
                 </div>
 
+                <h2>🪟 Windows Installation</h2>
+                <p><strong>Quick Install (PowerShell - Run as Administrator):</strong></p>
+                <div class="command">
+                    <code>irm http://{self.headers.get('Host', 'SERVER_IP')}/install-windows | iex</code>
+                </div>
+
+                <p><strong>Manual Install:</strong></p>
+                <p>1. Download installer:</p>
+                <div class="command">
+                    <code>Invoke-WebRequest -Uri http://{self.headers.get('Host', 'SERVER_IP')}/download/install-bridge.ps1 -OutFile install-bridge.ps1</code>
+                </div>
+
+                <p>2. Run installer (as Administrator):</p>
+                <div class="command">
+                    <code>Set-ExecutionPolicy Bypass -Scope Process -Force<br>
+                    $env:SOURCE_SERVER="http://{self.headers.get('Host', 'SERVER_IP')}"<br>
+                    .\\install-bridge.ps1</code>
+                </div>
+
                 <h2>Available Downloads</h2>
                 <ul>
-                    <li><a href="/download/install-bridge.sh">install-bridge.sh</a> - Installation script</li>
+                    <li><a href="/download/install-bridge.sh">install-bridge.sh</a> - Linux installation script</li>
+                    <li><a href="/download/install-bridge.ps1">install-bridge.ps1</a> - Windows installation script</li>
                     <li><a href="/download/claude-bridge-server-terminal.py">claude-bridge-server-terminal.py</a> - Bridge server</li>
                 </ul>
 
@@ -181,6 +207,7 @@ class DeploymentHandler(BaseHTTPRequestHandler):
 
                 <h2>New Features</h2>
                 <ul>
+                    <li>🖥️ <strong>Multi-Platform Support</strong> - Linux, Windows, and macOS support with auto-detection</li>
                     <li>🔄 <strong>Remote Restart</strong> - Restart bridge server from web UI</li>
                     <li>⬆️ <strong>Remote Update</strong> - Pull latest code and restart via web UI</li>
                     <li>🗑️ <strong>Session Filtering</strong> - Invalid sessions automatically hidden</li>

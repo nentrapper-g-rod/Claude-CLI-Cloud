@@ -65,6 +65,34 @@ class SettingsAPI:
             print(f"Error getting init script: {e}")
             return web.json_response({'error': str(e)}, status=500)
 
+    async def handle_save_connections(self, request):
+        """Save connections configuration"""
+        try:
+            data = await request.json()
+            connections = data.get('connections', [])
+
+            connections_path = self.base_path / 'connections.json'
+            connections_path.write_text(json.dumps(connections, indent=2))
+
+            return web.json_response({'status': 'success'})
+        except Exception as e:
+            print(f"Error saving connections: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_get_connections(self, request):
+        """Get connections configuration"""
+        try:
+            connections_path = self.base_path / 'connections.json'
+            if connections_path.exists():
+                content = connections_path.read_text()
+                connections = json.loads(content)
+                return web.json_response({'connections': connections})
+            else:
+                return web.json_response({'connections': []})
+        except Exception as e:
+            print(f"Error getting connections: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
     async def handle_sync_conversation(self, request):
         """Receive conversation data from bridge servers"""
         try:
@@ -196,12 +224,14 @@ class SettingsAPI:
 
                 grouped[conn][project].append({
                     'session_id': session['session_id'],
+                    'parent_session_id': session.get('parent_session_id'),
                     'connection_name': conn,
                     'project': project,
                     'cwd': session.get('cwd'),
                     'created_at': session.get('created_at'),
                     'last_modified': session.get('last_modified'),
-                    'message_count': session.get('message_count', 0)
+                    'message_count': session.get('message_count', 0),
+                    'project_tags': session.get('project_tags')
                 })
 
             return web.json_response(grouped)
@@ -239,6 +269,8 @@ class SettingsAPI:
         app.router.add_post('/api/init-script', self.handle_save_init_script)
         app.router.add_get('/api/init-script', self.handle_get_init_script)
         app.router.add_post('/api/personal-prefs', self.handle_save_personal_prefs)
+        app.router.add_post('/api/connections', self.handle_save_connections)
+        app.router.add_get('/api/connections', self.handle_get_connections)
         app.router.add_post('/api/conversations/sync', self.handle_sync_conversation)
         app.router.add_get('/api/conversations/query', self.handle_query_session)
         app.router.add_get('/api/conversations/stats', self.handle_query_stats)

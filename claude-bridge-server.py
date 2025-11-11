@@ -21,6 +21,7 @@ try:
     import aiofiles
     from watchdog.observers import Observer
     from watchdog.events import FileSystemEventHandler
+    from conversation_db import get_db
 except ImportError:
     print("ERROR: Required dependencies not installed.")
     print("Please install: pip install anthropic aiofiles websockets watchdog")
@@ -77,6 +78,13 @@ class ClaudeBridgeServer:
 
         self.anthropic = Anthropic(api_key=self.api_key)
         self.clients = set()
+
+        # Database connection for session metadata
+        try:
+            self.db = get_db()
+        except Exception as e:
+            print(f"Warning: Could not connect to database: {e}")
+            self.db = None
 
         # Session cache: {session_id: {messages: [], metadata: {}}}
         self.session_cache = {}
@@ -274,6 +282,7 @@ class ClaudeBridgeServer:
                         'preview': preview,
                         'message_count': metadata.get('message_count', 0),
                         'cwd': metadata.get('cwd', ''),
+                        'parent_session_id': None,  # Will be populated from database if available
                     }
 
                     sessions_in_project.append(session_info)
@@ -290,6 +299,35 @@ class ClaudeBridgeServer:
                     projects_data[project_name] = {
                         'directories': directories
                     }
+
+        # Fetch parent_session_id from database for all sessions
+        if self.db:
+            try:
+                all_sessions = []
+                for project in projects_data.values():
+                    for directory in project['directories'].values():
+                        all_sessions.extend(directory)
+                all_sessions.extend(ungrouped_sessions)
+
+                # Get session IDs
+                session_ids = [s['session_id'] for s in all_sessions]
+
+                # Fetch parent info from database in batch
+                for session_id in session_ids:
+                    try:
+                        db_sessions = self.db.get_sessions(limit=1000)
+                        session_map = {s['session_id']: s.get('parent_session_id') for s in db_sessions}
+
+                        # Update all sessions with parent info
+                        for session in all_sessions:
+                            if session['session_id'] in session_map:
+                                session['parent_session_id'] = session_map[session['session_id']]
+                        break  # Only need to query once
+                    except Exception as e:
+                        print(f"Warning: Could not fetch parent_session_id: {e}")
+                        break
+            except Exception as e:
+                print(f"Warning: Error fetching session parents: {e}")
 
         # Sort sessions by last_modified (most recent first)
         for project in projects_data.values():

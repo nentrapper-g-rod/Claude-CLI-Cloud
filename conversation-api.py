@@ -36,6 +36,7 @@ class ConversationAPI:
             messages = data.get('messages', [])
             project = data.get('project')
             cwd = data.get('cwd')
+            parent_session_id = data.get('parent_session_id')
 
             if not session_id or not connection_name:
                 return web.json_response({'error': 'Missing session_id or connection_name'}, status=400)
@@ -44,6 +45,7 @@ class ConversationAPI:
             self.db.upsert_session(
                 session_id=session_id,
                 connection_name=connection_name,
+                parent_session_id=parent_session_id,
                 custom_title=data.get('custom_title'),
                 project=project,
                 cwd=cwd,
@@ -128,6 +130,76 @@ class ConversationAPI:
             print(f"Error getting connections: {e}")
             return web.json_response({'error': str(e)}, status=500)
 
+    async def handle_get_session_thread(self, request):
+        """Get the parent chain for a session"""
+        try:
+            session_id = request.match_info['session_id']
+            thread = self.db.get_session_thread(session_id)
+            return web.json_response({'session_id': session_id, 'thread': thread})
+
+        except Exception as e:
+            print(f"Error getting session thread: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_get_session_children(self, request):
+        """Get direct children of a session"""
+        try:
+            session_id = request.match_info['session_id']
+            children = self.db.get_session_children(session_id)
+            return web.json_response({'session_id': session_id, 'children': children})
+
+        except Exception as e:
+            print(f"Error getting session children: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_get_session_tree(self, request):
+        """Get the complete tree for a session (parent chain + all descendants)"""
+        try:
+            session_id = request.match_info['session_id']
+            tree = self.db.get_session_tree(session_id)
+            return web.json_response({'session_id': session_id, 'tree': tree})
+
+        except Exception as e:
+            print(f"Error getting session tree: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_get_root_sessions(self, request):
+        """Get only root sessions (sessions with no parent)"""
+        try:
+            connection_name = request.query.get('connection')
+            limit = int(request.query.get('limit', 100))
+
+            sessions = self.db.get_root_sessions(connection_name=connection_name, limit=limit)
+            return web.json_response({'sessions': sessions})
+
+        except Exception as e:
+            print(f"Error getting root sessions: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_get_favorites(self, request):
+        """Get favorite/pinned sessions"""
+        try:
+            connection_name = request.query.get('connection')
+            limit = int(request.query.get('limit', 100))
+
+            sessions = self.db.get_favorite_sessions(connection_name=connection_name, limit=limit)
+            return web.json_response({'sessions': sessions})
+
+        except Exception as e:
+            print(f"Error getting favorite sessions: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
+    async def handle_toggle_favorite(self, request):
+        """Toggle favorite status of a session"""
+        try:
+            session_id = request.match_info['session_id']
+            new_status = self.db.toggle_favorite(session_id)
+            return web.json_response({'session_id': session_id, 'is_favorite': new_status})
+
+        except Exception as e:
+            print(f"Error toggling favorite: {e}")
+            return web.json_response({'error': str(e)}, status=500)
+
     async def handle_get_init_script(self, request):
         """Get the init.sh script"""
         try:
@@ -183,7 +255,13 @@ class ConversationAPI:
         # Add routes
         app.router.add_post('/api/conversations/sync', self.handle_sync_conversation)
         app.router.add_get('/api/conversations', self.handle_get_conversations)
+        app.router.add_get('/api/conversations/roots', self.handle_get_root_sessions)
+        app.router.add_get('/api/conversations/favorites', self.handle_get_favorites)
         app.router.add_get('/api/conversations/{session_id}', self.handle_get_conversation)
+        app.router.add_post('/api/conversations/{session_id}/favorite', self.handle_toggle_favorite)
+        app.router.add_get('/api/conversations/{session_id}/thread', self.handle_get_session_thread)
+        app.router.add_get('/api/conversations/{session_id}/children', self.handle_get_session_children)
+        app.router.add_get('/api/conversations/{session_id}/tree', self.handle_get_session_tree)
         app.router.add_get('/api/conversations/search', self.handle_search_conversations)
         app.router.add_get('/api/connections/list', self.handle_get_connections)
         app.router.add_get('/api/init-script', self.handle_get_init_script)
@@ -193,7 +271,13 @@ class ConversationAPI:
         # Add CORS preflight handlers
         app.router.add_options('/api/conversations/sync', self.handle_options)
         app.router.add_options('/api/conversations', self.handle_options)
+        app.router.add_options('/api/conversations/roots', self.handle_options)
+        app.router.add_options('/api/conversations/favorites', self.handle_options)
         app.router.add_options('/api/conversations/{session_id}', self.handle_options)
+        app.router.add_options('/api/conversations/{session_id}/favorite', self.handle_options)
+        app.router.add_options('/api/conversations/{session_id}/thread', self.handle_options)
+        app.router.add_options('/api/conversations/{session_id}/children', self.handle_options)
+        app.router.add_options('/api/conversations/{session_id}/tree', self.handle_options)
         app.router.add_options('/api/conversations/search', self.handle_options)
         app.router.add_options('/api/connections/list', self.handle_options)
         app.router.add_options('/api/init-script', self.handle_options)

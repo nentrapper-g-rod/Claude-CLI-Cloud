@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Claude CLI Cloud</title>
+    <title>Steel Server Bridge v2.15.0</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.svg">
@@ -152,7 +152,13 @@
         }
 
         .session-item.active {
-            background: #4a9eff;
+            /* Background color set dynamically per session */
+            opacity: 0.4;
+            transition: opacity 0.3s;
+        }
+
+        .session-item.active.current-tab {
+            opacity: 1;
         }
 
         .session-preview {
@@ -261,17 +267,20 @@
             align-items: center;
             gap: 8px;
             font-size: 14px;
-            transition: background 0.2s;
+            transition: background 0.2s, opacity 0.3s;
+            opacity: 0.5;
         }
 
         .tab:hover {
             background: #2a2a2a;
+            opacity: 0.8;
         }
 
         .tab.active {
             background: #000;
-            color: #4a9eff;
-            border-bottom: 2px solid #4a9eff;
+            color: #fff;
+            opacity: 1;
+            /* Border color set dynamically per session */
         }
 
         .tab.dragging {
@@ -689,9 +698,19 @@
                     <label for="connPort">WebSocket Port:</label>
                     <input type="number" id="connPort" required placeholder="e.g., 8766" value="8766">
                 </div>
+                <div class="form-group">
+                    <label for="connPlatform">Platform:</label>
+                    <select id="connPlatform">
+                        <option value="auto">Auto-detect</option>
+                        <option value="linux">Linux</option>
+                        <option value="windows">Windows</option>
+                        <option value="macos">macOS</option>
+                    </select>
+                </div>
                 <div class="modal-buttons">
                     <button type="submit" style="background: #4a9eff; color: white;">Save</button>
                     <button type="button" id="cancelBtn" style="background: #555; color: white;">Cancel</button>
+                    <button type="button" id="deleteConnectionBtn" style="background: #f44336; color: white; display: none;">Delete</button>
                 </div>
             </form>
         </div>
@@ -841,8 +860,8 @@ export CLAUDE_CONNECTION_NAME=$(hostname)
         <div class="modal-content" style="max-width: 900px;">
             <div class="modal-header">🚀 Deploy Bridge to New Server</div>
             <div style="padding: 0 20px 20px 20px; overflow-y: auto; max-height: 70vh;">
-                <h3 style="color: #4a9eff; margin-top: 0;">Quick Deploy Command</h3>
-                <p style="color: #b0b0b0; margin-bottom: 10px;">Run this single command on your new server:</p>
+                <h3 style="color: #4a9eff; margin-top: 0;">🐧 Linux Quick Deploy</h3>
+                <p style="color: #b0b0b0; margin-bottom: 10px;">Run this single command on your new Linux server:</p>
                 <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px; position: relative;">
                     <code id="deployCommand" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">curl -fsSL http://100.94.187.56:8890/install | SOURCE_SERVER=http://100.94.187.56:8890 MACHINE_NAME="your-server" WS_PORT=8766 bash</code>
                     <button id="copyDeployBtn" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px; background: #3a3a3a; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">📋 Copy</button>
@@ -850,6 +869,18 @@ export CLAUDE_CONNECTION_NAME=$(hostname)
                 <p style="color: #888; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">
                     💡 The installer will prompt for your password (via sudo) when creating the systemd service.<br>
                     🐛 Port 8766 automatically enables debug logging for troubleshooting.
+                </p>
+
+                <h3 style="color: #4a9eff;">🪟 Windows Quick Deploy</h3>
+                <p style="color: #b0b0b0; margin-bottom: 10px;">Run this command in PowerShell (as Administrator) on your new Windows server:</p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px; position: relative;">
+                    <code id="deployCommandWindows" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">irm http://100.94.187.56:8890/install-windows | iex</code>
+                    <button id="copyDeployBtnWindows" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px; background: #3a3a3a; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">📋 Copy</button>
+                </div>
+                <p style="color: #888; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">
+                    💡 The installer will prompt for machine name and port configuration.<br>
+                    🔧 Requires Python 3.8+ and creates a Windows Service or Scheduled Task.<br>
+                    📦 Automatically installs pywinpty for Windows terminal support.
                 </p>
 
                 <h3 style="color: #4a9eff;">What It Does</h3>
@@ -886,7 +917,7 @@ export CLAUDE_CONNECTION_NAME=$(hostname)
                 </ol>
 
                 <h3 style="color: #4a9eff;">Service Management</h3>
-                <p style="color: #b0b0b0;">On the new server:</p>
+                <p style="color: #b0b0b0;">🐧 <strong>Linux</strong> (systemd):</p>
                 <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
                     <code style="color: #e0e0e0; font-size: 13px; display: block; line-height: 1.8;">
 sudo systemctl start claude-bridge    <span style="color: #888;"># Start</span><br>
@@ -895,14 +926,34 @@ sudo systemctl status claude-bridge   <span style="color: #888;"># Status</span>
 sudo systemctl enable claude-bridge   <span style="color: #888;"># Start on boot</span>
                     </code>
                 </div>
+                <p style="color: #b0b0b0;">🪟 <strong>Windows</strong> (PowerShell as Administrator):</p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <code style="color: #e0e0e0; font-size: 13px; display: block; line-height: 1.8;">
+Start-ScheduledTask -TaskName ClaudeBridge    <span style="color: #888;"># Start</span><br>
+Stop-ScheduledTask -TaskName ClaudeBridge     <span style="color: #888;"># Stop (if using Task Scheduler)</span><br>
+Get-ScheduledTask -TaskName ClaudeBridge | Get-ScheduledTaskInfo    <span style="color: #888;"># Status</span><br>
+<span style="color: #888;"># Or if using NSSM:</span><br>
+nssm start ClaudeBridge    <span style="color: #888;"># Start</span><br>
+nssm stop ClaudeBridge     <span style="color: #888;"># Stop</span><br>
+nssm status ClaudeBridge   <span style="color: #888;"># Status</span>
+                    </code>
+                </div>
 
                 <h3 style="color: #4a9eff;">View Logs</h3>
-                <p style="color: #b0b0b0;">Logs are saved to <code style="background: #2d2d2d; padding: 2px 6px; border-radius: 3px;">~/.claude-bridge/bridge.log</code></p>
-                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                <p style="color: #b0b0b0;">🐧 <strong>Linux:</strong> <code style="background: #2d2d2d; padding: 2px 6px; border-radius: 3px;">~/.claude-bridge/bridge.log</code></p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 10px;">
                     <code style="color: #e0e0e0; font-size: 13px; display: block; line-height: 1.8;">
 tail -f ~/.claude-bridge/bridge.log   <span style="color: #888;"># Follow logs in real-time</span><br>
 tail -100 ~/.claude-bridge/bridge.log <span style="color: #888;"># View last 100 lines</span><br>
 grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug messages</span>
+                    </code>
+                </div>
+                <p style="color: #b0b0b0;">🪟 <strong>Windows:</strong> <code style="background: #2d2d2d; padding: 2px 6px; border-radius: 3px;">C:\ProgramData\claude-bridge\bridge.log</code></p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px;">
+                    <code style="color: #e0e0e0; font-size: 13px; display: block; line-height: 1.8;">
+Get-Content C:\ProgramData\claude-bridge\bridge.log -Wait    <span style="color: #888;"># Follow logs</span><br>
+Get-Content C:\ProgramData\claude-bridge\bridge.log -Tail 100    <span style="color: #888;"># Last 100 lines</span><br>
+Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    <span style="color: #888;"># Filter</span>
                     </code>
                 </div>
 
@@ -1422,6 +1473,9 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jstree/3.3.16/jstree.min.js"></script>
 
     <script>
+        // Version
+        const UI_VERSION = "2.15.0";
+
         // State
         const state = {
             // Legacy single connection support (for backwards compat during migration)
@@ -1442,6 +1496,9 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             tabs: {},                     // Map of sessionId -> { terminal, fitAddon, element, tabElement, sessionId, title, connectionIndex }
             activeTab: null,
 
+            // Session color mapping for active sessions
+            sessionColors: {},            // Map: sessionId -> color
+
             // Server-side preferences
             preferences: {
                 personalPreferences: '',
@@ -1450,6 +1507,28 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                 sidebarWidth: 300
             }
         };
+
+        // Generate distinct colors for sessions
+        const distinctColors = [
+            '#4a9eff', '#ff6b6b', '#51cf66', '#ffd43b', '#ff8787',
+            '#9775fa', '#69db7c', '#ffa94d', '#da77f2', '#63e6be',
+            '#fd7e14', '#74c0fc', '#ff6b9d', '#20c997', '#fa5252',
+            '#339af0', '#94d82d', '#fcc419', '#ff8800', '#15aabf'
+        ];
+
+        function getSessionColor(sessionId) {
+            if (!state.sessionColors[sessionId]) {
+                // Find next available color
+                const usedColors = Object.values(state.sessionColors);
+                const availableColor = distinctColors.find(c => !usedColors.includes(c));
+                state.sessionColors[sessionId] = availableColor || distinctColors[Object.keys(state.sessionColors).length % distinctColors.length];
+            }
+            return state.sessionColors[sessionId];
+        }
+
+        function releaseSessionColor(sessionId) {
+            delete state.sessionColors[sessionId];
+        }
 
         // Connection management functions
         async function loadConnections() {
@@ -1562,15 +1641,13 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
 
         function renderConnectionSelect() {
             const select = document.getElementById('connectionSelect');
-            select.innerHTML = '<option value="">Select Connection...</option>';
+            select.innerHTML = '<option value="">Select a connection to edit...</option>';
 
             state.connections.forEach((conn, index) => {
                 const option = document.createElement('option');
                 option.value = index;
                 option.textContent = `${conn.name} (${conn.host}:${conn.port})`;
-                if (state.currentConnection === index) {
-                    option.selected = true;
-                }
+                // Don't auto-select to avoid accidentally editing the wrong connection
                 select.appendChild(option);
             });
         }
@@ -1579,6 +1656,7 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             const modal = document.getElementById('connectionModal');
             const form = document.getElementById('connectionForm');
             const title = document.getElementById('modalTitle');
+            const deleteBtn = document.getElementById('deleteConnectionBtn');
 
             state.editingConnectionIndex = editIndex;
 
@@ -1588,10 +1666,14 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                 document.getElementById('connName').value = conn.name;
                 document.getElementById('connHost').value = conn.host;
                 document.getElementById('connPort').value = conn.port;
+                document.getElementById('connPlatform').value = conn.platform || 'auto';
+                deleteBtn.style.display = 'block';
             } else {
                 title.textContent = 'Add Connection';
                 form.reset();
                 document.getElementById('connPort').value = '8766';
+                document.getElementById('connPlatform').value = 'auto';
+                deleteBtn.style.display = 'none';
             }
 
             modal.style.display = 'flex';
@@ -1609,7 +1691,8 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             const conn = {
                 name: document.getElementById('connName').value,
                 host: document.getElementById('connHost').value,
-                port: parseInt(document.getElementById('connPort').value)
+                port: parseInt(document.getElementById('connPort').value),
+                platform: document.getElementById('connPlatform').value
             };
 
             if (state.editingConnectionIndex !== null) {
@@ -1624,24 +1707,73 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
         }
 
         async function deleteConnection() {
-            const select = document.getElementById('connectionSelect');
-            const index = parseInt(select.value);
+            const index = state.editingConnectionIndex;
 
-            if (isNaN(index)) {
-                alert('Please select a connection to delete');
+            if (index === null || index === undefined) {
+                alert('No connection selected for deletion');
                 return;
             }
 
-            if (confirm(`Delete connection "${state.connections[index].name}"?`)) {
-                if (state.currentConnection === index) {
-                    if (state.websocket) {
-                        state.websocket.close();
-                    }
-                    state.currentConnection = null;
+            const connName = state.connections[index].name;
+
+            if (!confirm(`Delete connection "${connName}"?\n\nThis will close any open tabs for this connection.`)) {
+                return;
+            }
+
+            // Close the websocket for this connection if it's open
+            const connTab = state.connectionTabs[index];
+            if (connTab && connTab.websocket) {
+                connTab.websocket.close();
+            }
+
+            // Close all open tabs for this connection
+            if (connTab && connTab.tabs) {
+                Object.keys(connTab.tabs).forEach(sessionId => {
+                    closeTabForConnection(index, sessionId);
+                });
+            }
+
+            // Remove the connection tab element from UI
+            const tabElement = document.querySelector(`.connection-tab[data-conn-index="${index}"]`);
+            if (tabElement) {
+                tabElement.remove();
+            }
+
+            // Remove connection from state
+            state.connections.splice(index, 1);
+
+            // Remove from connectionTabs object (not array)
+            delete state.connectionTabs[index];
+
+            // Update active connection tab index if needed
+            if (state.activeConnectionTab === index) {
+                state.activeConnectionTab = null;
+            } else if (state.activeConnectionTab > index) {
+                state.activeConnectionTab--;
+            }
+
+            // Update legacy currentConnection if needed
+            if (state.currentConnection === index) {
+                if (state.websocket) {
+                    state.websocket.close();
                 }
-                state.connections.splice(index, 1);
-                await saveConnections();
-                renderConnectionSelect();
+                state.currentConnection = null;
+            } else if (state.currentConnection > index) {
+                state.currentConnection--;
+            }
+
+            await saveConnections();
+            renderConnectionSelect();
+            hideConnectionModal();
+
+            // Update all remaining connection tab indices in the DOM
+            document.querySelectorAll('.connection-tab').forEach((tab, newIndex) => {
+                tab.setAttribute('data-conn-index', newIndex);
+            });
+
+            // Clear sessions list if no active connection
+            if (state.activeConnectionTab === null) {
+                document.getElementById('sessionsList').innerHTML = '<div class="loading">No active connection</div>';
             }
         }
 
@@ -1848,6 +1980,12 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
 
             tab.onclick = () => switchToConnectionTab(connIndex);
 
+            // Add right-click context menu for connection options
+            tab.addEventListener('contextmenu', (e) => {
+                e.preventDefault();
+                showConnectionContextMenu(e, connIndex);
+            });
+
             container.appendChild(tab);
 
             return tab;
@@ -2009,6 +2147,134 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             }
         }
 
+        function showConnectionContextMenu(event, connIndex) {
+            const conn = state.connections[connIndex];
+            if (!conn) return;
+
+            // Remove any existing context menu
+            const existingMenu = document.getElementById('connectionContextMenu');
+            if (existingMenu) {
+                existingMenu.remove();
+            }
+
+            // Create context menu
+            const menu = document.createElement('div');
+            menu.id = 'connectionContextMenu';
+            menu.style.cssText = `
+                position: fixed;
+                left: ${event.clientX}px;
+                top: ${event.clientY}px;
+                background: #2a2a2a;
+                border: 1px solid #4a4a4a;
+                border-radius: 5px;
+                box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+                z-index: 10000;
+                min-width: 180px;
+                padding: 5px 0;
+            `;
+
+            // Add menu items
+            const items = [
+                {
+                    label: '🔄 Reconnect',
+                    action: () => reconnectConnection(connIndex),
+                    visible: true
+                },
+                {
+                    label: '🗑️ Remove Connection',
+                    action: () => removeConnection(connIndex),
+                    visible: true,
+                    color: '#ff4a4a'
+                }
+            ];
+
+            items.forEach(item => {
+                if (!item.visible) return;
+
+                const menuItem = document.createElement('div');
+                menuItem.style.cssText = `
+                    padding: 10px 15px;
+                    cursor: pointer;
+                    color: ${item.color || '#e0e0e0'};
+                    transition: background 0.2s;
+                `;
+                menuItem.textContent = item.label;
+
+                menuItem.addEventListener('mouseenter', () => {
+                    menuItem.style.background = '#3a3a3a';
+                });
+                menuItem.addEventListener('mouseleave', () => {
+                    menuItem.style.background = 'transparent';
+                });
+
+                menuItem.addEventListener('click', () => {
+                    item.action();
+                    menu.remove();
+                });
+
+                menu.appendChild(menuItem);
+            });
+
+            document.body.appendChild(menu);
+
+            // Close menu when clicking elsewhere
+            const closeMenu = (e) => {
+                if (!menu.contains(e.target)) {
+                    menu.remove();
+                    document.removeEventListener('click', closeMenu);
+                }
+            };
+            setTimeout(() => {
+                document.addEventListener('click', closeMenu);
+            }, 10);
+        }
+
+        function removeConnection(connIndex) {
+            const conn = state.connections[connIndex];
+            if (!conn) return;
+
+            // Confirm with user
+            if (!confirm(`Are you sure you want to remove the connection "${conn.name}"?\n\nThis will:\n- Close all active sessions\n- Remove it from your connection list\n- You can add it back later from Settings`)) {
+                return;
+            }
+
+            console.log(`Removing connection ${connIndex} (${conn.name})`);
+
+            // Close the connection tab first
+            closeConnectionTab(connIndex);
+
+            // Remove from state.connections array
+            state.connections.splice(connIndex, 1);
+
+            // Save updated connections to localStorage
+            saveConnectionsToStorage();
+
+            // Update connection tab indices for remaining connections
+            state.connectionTabs = {};
+            state.activeConnectionTab = null;
+
+            // Recreate all connection tabs with updated indices
+            const container = document.getElementById('connectionTabsContainer');
+            container.innerHTML = '';
+
+            state.connections.forEach((connection, index) => {
+                createConnectionTab(index);
+            });
+
+            // If there are connections left, open the first one
+            if (state.connections.length > 0) {
+                openConnectionTab(0);
+            } else {
+                // No connections left, show empty state
+                const sessionsList = document.getElementById('sessionsList');
+                if (sessionsList) {
+                    sessionsList.innerHTML = '<div class="loading">No connections configured. Add one from Settings.</div>';
+                }
+            }
+
+            showStatus(`Connection "${conn.name}" removed`, 'success');
+        }
+
         function restartBridgeServer(connIndex) {
             const connTab = state.connectionTabs[connIndex];
             const conn = state.connections[connIndex];
@@ -2155,8 +2421,14 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                 tab.tabElement.remove();
             }
 
+            // Release the session color
+            releaseSessionColor(sessionId);
+
             // Remove from state
             delete connTab.tabs[sessionId];
+
+            // Refresh sessions list to update highlighting
+            setTimeout(() => renderSessions(), 100);
 
             // If this was the active tab, switch to another
             if (connTab.activeTab === sessionId) {
@@ -2449,14 +2721,42 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             setTimeout(() => fitAndResize(), 1000);
             setTimeout(() => fitAndResize(), 2000);
 
-            // Handle terminal input
+            // Handle terminal input with buffering to reduce WebSocket overhead
+            let inputBuffer = '';
+            let inputTimer = null;
+
             terminal.onData(data => {
                 if (state.websocket && state.websocket.readyState === WebSocket.OPEN) {
-                    state.websocket.send(JSON.stringify({
-                        type: 'terminal_input',
-                        session_id: sessionId,
-                        input: data
-                    }));
+                    // Buffer input characters
+                    inputBuffer += data;
+
+                    // Clear existing timer
+                    if (inputTimer) clearTimeout(inputTimer);
+
+                    // Send buffered input after 10ms of no typing (or immediately for Enter/special keys)
+                    const shouldFlushImmediately = data.includes('\r') || data.includes('\n') || data.charCodeAt(0) < 32;
+
+                    if (shouldFlushImmediately) {
+                        // Send immediately for Enter or control characters
+                        state.websocket.send(JSON.stringify({
+                            type: 'terminal_input',
+                            session_id: sessionId,
+                            input: inputBuffer
+                        }));
+                        inputBuffer = '';
+                    } else {
+                        // Buffer regular characters and send after brief delay
+                        inputTimer = setTimeout(() => {
+                            if (inputBuffer) {
+                                state.websocket.send(JSON.stringify({
+                                    type: 'terminal_input',
+                                    session_id: sessionId,
+                                    input: inputBuffer
+                                }));
+                                inputBuffer = '';
+                            }
+                        }, 10); // 10ms buffer time
+                    }
                 }
             });
 
@@ -2669,14 +2969,42 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             setTimeout(() => fitAndResize(), 1000);
             setTimeout(() => fitAndResize(), 2000);
 
-            // Handle terminal input - route to correct connection
+            // Handle terminal input - route to correct connection (with buffering)
+            let inputBuffer = '';
+            let inputTimer = null;
+
             terminal.onData(data => {
                 if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
-                    connTab.websocket.send(JSON.stringify({
-                        type: 'terminal_input',
-                        session_id: sessionId,
-                        input: data
-                    }));
+                    // Buffer input characters
+                    inputBuffer += data;
+
+                    // Clear existing timer
+                    if (inputTimer) clearTimeout(inputTimer);
+
+                    // Send buffered input after 10ms of no typing (or immediately for Enter/special keys)
+                    const shouldFlushImmediately = data.includes('\r') || data.includes('\n') || data.charCodeAt(0) < 32;
+
+                    if (shouldFlushImmediately) {
+                        // Send immediately for Enter or control characters
+                        connTab.websocket.send(JSON.stringify({
+                            type: 'terminal_input',
+                            session_id: sessionId,
+                            input: inputBuffer
+                        }));
+                        inputBuffer = '';
+                    } else {
+                        // Buffer regular characters and send after brief delay
+                        inputTimer = setTimeout(() => {
+                            if (inputBuffer) {
+                                connTab.websocket.send(JSON.stringify({
+                                    type: 'terminal_input',
+                                    session_id: sessionId,
+                                    input: inputBuffer
+                                }));
+                                inputBuffer = '';
+                            }
+                        }, 10); // 10ms buffer time
+                    }
                 }
             });
 
@@ -2687,6 +3015,11 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             const tab = document.createElement('div');
             tab.className = 'tab';
             tab.style.display = 'none'; // Hidden by default
+
+            // Apply unique color to tab
+            const sessionColor = getSessionColor(sessionId);
+            tab.style.borderBottom = `3px solid ${sessionColor}`;
+
             tab.innerHTML = `
                 <span class="tab-title">${title}</span>
                 <span class="tab-close" data-session="${sessionId}" data-conn="${connIndex}">×</span>
@@ -3058,6 +3391,21 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             switch (data.type) {
                 case 'connected':
                     console.log(`Server acknowledged connection for ${state.connections[connIndex].name}`);
+                    // Store platform and version if provided
+                    if (data.platform) {
+                        connTab.platform = data.platform;
+                    }
+                    if (data.version) {
+                        connTab.version = data.version;
+                        // Update the version/platform display in the connection tab
+                        if (connTab.tabElement) {
+                            const versionEl = connTab.tabElement.querySelector('.connection-tab-version');
+                            if (versionEl) {
+                                const platformIcon = data.platform === 'windows' ? '🪟' : data.platform === 'linux' ? '🐧' : data.platform === 'macos' ? '🍎' : '';
+                                versionEl.textContent = `v${data.version} ${platformIcon}`;
+                            }
+                        }
+                    }
                     break;
 
                 case 'request_init_script':
@@ -3084,7 +3432,8 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                     if (connTab.tabElement) {
                         const versionEl = connTab.tabElement.querySelector('.connection-tab-version');
                         if (versionEl) {
-                            versionEl.textContent = `v${data.version}`;
+                            const platformIcon = connTab.platform === 'windows' ? '🪟' : connTab.platform === 'linux' ? '🐧' : connTab.platform === 'macos' ? '🍎' : '';
+                            versionEl.textContent = `v${data.version} ${platformIcon}`;
                         }
                     }
                     break;
@@ -3673,8 +4022,77 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
                 }
             }
 
+            // Load favorites from localStorage for this connection (for non-Steel Server connections)
+            const connIndex = state.activeConnectionTab !== null ? state.activeConnectionTab :
+                             (state.currentConnection !== null ? state.currentConnection : 0);
+            const storageKey = `favorites_${connIndex}`;
+            const favorites = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+            // Apply localStorage favorites to sessions that don't have is_favorite set from database
+            allSessions.forEach(session => {
+                if (session.is_favorite === undefined || session.is_favorite === null || session.is_favorite === 0) {
+                    if (favorites[session.session_id]) {
+                        session.is_favorite = 1;
+                    }
+                }
+            });
+
             // Sort all sessions by last_modified (most recent first)
             allSessions.sort((a, b) => new Date(b.last_modified) - new Date(a.last_modified));
+
+            // Always show "Favorites" section (even if empty)
+            const favoriteSessions = allSessions.filter(s => s.is_favorite === 1 || s.is_favorite === true);
+
+            const favSection = document.createElement('div');
+            favSection.className = 'project-section';
+
+            const favHeader = document.createElement('div');
+            favHeader.className = 'project-header';
+            favHeader.textContent = `⭐ Favorites (${favoriteSessions.length})`;
+            favHeader.style.color = '#ffd700';
+            favHeader.style.fontWeight = 'bold';
+            favSection.appendChild(favHeader);
+
+            const favContent = document.createElement('div');
+            favContent.className = 'directory-content';
+            favContent.style.marginLeft = '10px';
+
+            if (favoriteSessions.length === 0) {
+                // Show empty state
+                const emptyMsg = document.createElement('div');
+                emptyMsg.style.cssText = 'padding: 10px; color: #888; font-style: italic; font-size: 12px;';
+                emptyMsg.textContent = 'No favorite sessions yet. Click the ☆ star to add sessions here.';
+                favContent.appendChild(emptyMsg);
+            } else {
+                favoriteSessions.forEach(session => {
+                    // Ensure matched_projects is populated
+                    if (!session.matched_projects || session.matched_projects.length === 0) {
+                        const matchedProjects = [];
+                        if (session.cwd && customProjects && customProjects.length > 0) {
+                            customProjects.forEach(proj => {
+                                const projDirs = proj.directories || (proj.working_directory ? [proj.working_directory] : []);
+                                for (const projDir of projDirs) {
+                                    if (session.cwd.startsWith(projDir)) {
+                                        matchedProjects.push({
+                                            id: proj.id,
+                                            name: proj.name,
+                                            color: proj.color || '#4a9eff'
+                                        });
+                                        break;
+                                    }
+                                }
+                            });
+                        }
+                        session.matched_projects = matchedProjects;
+                    }
+
+                    const item = createSessionItem(session);
+                    favContent.appendChild(item);
+                });
+            }
+
+            favSection.appendChild(favContent);
+            container.appendChild(favSection);
 
             // Show "Recent" section with top 5 sessions
             const recentSection = document.createElement('div');
@@ -3899,11 +4317,32 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
 
             // Check if session has an open tab in the active connection
             const activeConn = getActiveConnection();
+            let isActive = false;
+            let isCurrentTab = false;
+
             if (activeConn && activeConn.tabs[session.session_id]) {
+                isActive = true;
                 item.classList.add('active');
+                // Check if this is the currently active tab
+                if (activeConn.activeTab === session.session_id) {
+                    isCurrentTab = true;
+                    item.classList.add('current-tab');
+                }
             } else if (state.tabs[session.session_id]) {
                 // Legacy single connection
+                isActive = true;
                 item.classList.add('active');
+                if (state.activeTab === session.session_id) {
+                    isCurrentTab = true;
+                    item.classList.add('current-tab');
+                }
+            }
+
+            // Apply unique color if active
+            if (isActive) {
+                const sessionColor = getSessionColor(session.session_id);
+                item.style.background = sessionColor;
+                item.style.borderLeft = `4px solid ${sessionColor}`;
             }
 
             const preview = document.createElement('div');
@@ -3932,6 +4371,20 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             titleSpan.style.textOverflow = 'ellipsis';
             titleSpan.style.whiteSpace = 'nowrap';
 
+            const favoriteBtn = document.createElement('button');
+            const isFavorite = session.is_favorite === 1 || session.is_favorite === true;
+            // Debug logging
+            console.log(`Session ${session.session_id}: is_favorite=${session.is_favorite}, type=${typeof session.is_favorite}, isFavorite=${isFavorite}`);
+            favoriteBtn.innerHTML = isFavorite ? '⭐' : '☆';
+            favoriteBtn.style.cssText = 'background: none; border: none; cursor: pointer; padding: 4px; font-size: 16px; opacity: 0.7; flex-shrink: 0; color: #ffd700;';
+            favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+            favoriteBtn.addEventListener('mouseenter', () => favoriteBtn.style.opacity = '1');
+            favoriteBtn.addEventListener('mouseleave', () => favoriteBtn.style.opacity = '0.7');
+            favoriteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                await toggleFavorite(session.session_id, favoriteBtn, session);
+            });
+
             const assignBtn = document.createElement('button');
             assignBtn.innerHTML = '📁';
             assignBtn.style.cssText = 'background: none; border: none; cursor: pointer; padding: 4px; font-size: 14px; opacity: 0.6; flex-shrink: 0;';
@@ -3955,6 +4408,7 @@ grep DEBUG ~/.claude-bridge/bridge.log <span style="color: #888;"># Filter debug
             });
 
             preview.appendChild(titleSpan);
+            preview.appendChild(favoriteBtn);
             preview.appendChild(assignBtn);
             preview.appendChild(editBtn);
 
@@ -5676,6 +6130,77 @@ Always add or update the version number on the dashboards or index or scripts wi
             setTimeout(() => refreshSessions(), 500);
         }
 
+        async function toggleFavorite(sessionId, buttonElement, session) {
+            const connIndex = state.activeConnectionTab;
+            if (connIndex === null) {
+                showStatus('No active connection', 'error');
+                return;
+            }
+
+            console.log(`toggleFavorite called for session ${sessionId}, current is_favorite=${session?.is_favorite}`);
+
+            const storageKey = `favorites_${connIndex}`;
+            let favorites = JSON.parse(localStorage.getItem(storageKey) || '{}');
+
+            try {
+                // Try API first (for Steel Server with database)
+                const apiUrl = `${window.location.protocol}//${window.location.hostname}:8889/api/conversations/${sessionId}/favorite`;
+                console.log(`Calling API: ${apiUrl}`);
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    signal: AbortSignal.timeout(2000)  // 2 second timeout
+                });
+
+                console.log(`API response status: ${response.status}, ok: ${response.ok}`);
+
+                if (response.ok) {
+                    const data = await response.json();
+                    const isFavorite = data.is_favorite;
+                    console.log(`API returned is_favorite=${isFavorite}, type=${typeof isFavorite}`);
+
+                    // Also update localStorage for consistency
+                    if (isFavorite) {
+                        favorites[sessionId] = true;
+                    } else {
+                        delete favorites[sessionId];
+                    }
+                    localStorage.setItem(storageKey, JSON.stringify(favorites));
+
+                    // Update button immediately
+                    if (buttonElement) {
+                        buttonElement.innerHTML = isFavorite ? '⭐' : '☆';
+                        buttonElement.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+                    }
+                    // Refresh sessions list to update favorites section
+                    setTimeout(() => refreshSessions(), 300);
+                    showStatus(isFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
+                    return;
+                }
+            } catch (error) {
+                console.log('API not available, using localStorage fallback:', error);
+            }
+
+            // Fallback: Use localStorage for connections without API
+            const isFavorite = !favorites[sessionId];
+            if (isFavorite) {
+                favorites[sessionId] = true;
+            } else {
+                delete favorites[sessionId];
+            }
+            localStorage.setItem(storageKey, JSON.stringify(favorites));
+
+            // Update button immediately
+            if (buttonElement) {
+                buttonElement.innerHTML = isFavorite ? '⭐' : '☆';
+                buttonElement.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+            }
+
+            // Refresh sessions list to update favorites section
+            setTimeout(() => refreshSessions(), 300);
+            showStatus(isFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
+        }
+
         // Show resume session modal
         function showResumeSessionModal() {
             const modal = document.getElementById('resumeSessionModal');
@@ -5830,11 +6355,18 @@ Always add or update the version number on the dashboards or index or scripts wi
             const modal = document.getElementById('deployModal');
             modal.style.display = 'flex';
 
-            // Attach copy button handler
+            // Attach copy button handler for Linux
             const copyBtn = document.getElementById('copyDeployBtn');
             if (copyBtn && !copyBtn.hasAttribute('data-listener-attached')) {
                 copyBtn.addEventListener('click', copyDeployCommand);
                 copyBtn.setAttribute('data-listener-attached', 'true');
+            }
+
+            // Attach copy button handler for Windows
+            const copyBtnWindows = document.getElementById('copyDeployBtnWindows');
+            if (copyBtnWindows && !copyBtnWindows.hasAttribute('data-listener-attached')) {
+                copyBtnWindows.addEventListener('click', copyDeployCommandWindows);
+                copyBtnWindows.setAttribute('data-listener-attached', 'true');
             }
         }
 
@@ -5915,6 +6447,48 @@ Always add or update the version number on the dashboards or index or scripts wi
                 alert('Copy failed. Please copy manually:\n\n' + text);
             } finally {
                 document.body.removeChild(textArea);
+            }
+        }
+
+        // Copy Windows deploy command to clipboard
+        function copyDeployCommandWindows(event) {
+            console.log('Windows copy button clicked');
+
+            const commandEl = document.getElementById('deployCommandWindows');
+            if (!commandEl) {
+                console.error('Windows deploy command element not found');
+                alert('Error: Command element not found');
+                return;
+            }
+
+            const command = commandEl.textContent.trim();
+            console.log('Windows command to copy:', command);
+
+            const btn = event.target.closest('button');
+            if (!btn) {
+                console.error('Button not found');
+                return;
+            }
+
+            const originalText = btn.textContent;
+
+            // Try clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(command).then(() => {
+                    console.log('Copied successfully via Clipboard API');
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#3a9e3a';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '#3a3a3a';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(command, btn, originalText);
+                });
+            } else {
+                console.log('Clipboard API not available, using fallback');
+                fallbackCopy(command, btn, originalText);
             }
         }
 
@@ -6222,8 +6796,8 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Version constants
-        const WEB_APP_VERSION = '2.14.2';  // Performance: Session list caching, removed per-keystroke DB call
-        const BRIDGE_VERSION = '2.14.2';    // Performance: Session list caching, removed per-keystroke DB call
+        const WEB_APP_VERSION = '2.16.0';  // Auto-tag sessions with projects based on directory
+        const BRIDGE_VERSION = '2.16.0';    // Multi-platform support: Windows, Linux, macOS
 
         // Update metrics display
         function updateMetricsDisplay(metrics, serverName) {
@@ -6321,8 +6895,53 @@ Always add or update the version number on the dashboards or index or scripts wi
             }
         }
 
-        // Conversation History API URL
-        const CONVERSATION_API_URL = `http://${window.location.hostname}:8891/api`;
+        // Conversation History API URL (use Tailscale IP for cross-machine access)
+        const CONVERSATION_API_URL = `http://100.94.187.56:8891/api`;
+
+        // Build session threads (group by parent-child relationships)
+        function buildSessionThreads(sessions) {
+            const sessionMap = new Map();
+            const threads = [];
+
+            // Create a map of all sessions
+            sessions.forEach(s => sessionMap.set(s.session_id, { ...s, children: [] }));
+
+            // Build parent-child relationships
+            sessions.forEach(s => {
+                const session = sessionMap.get(s.session_id);
+                if (s.parent_session_id && sessionMap.has(s.parent_session_id)) {
+                    // This session has a parent - add it as a child
+                    sessionMap.get(s.parent_session_id).children.push(session);
+                } else {
+                    // Root session (no parent or parent not in this list)
+                    threads.push(session);
+                }
+            });
+
+            // Calculate thread stats (total messages, last modified across entire thread)
+            function calculateThreadStats(thread) {
+                let totalMessages = thread.message_count || 0;
+                let latestTime = thread.latest_message || thread.last_modified || '0';
+
+                thread.children.forEach(child => {
+                    const childStats = calculateThreadStats(child);
+                    totalMessages += childStats.totalMessages;
+                    if (childStats.latestTime > latestTime) {
+                        latestTime = childStats.latestTime;
+                    }
+                });
+
+                thread._threadMessageCount = totalMessages;
+                thread._threadLatestTime = latestTime;
+                thread._isThread = thread.children.length > 0;
+
+                return { totalMessages, latestTime };
+            }
+
+            threads.forEach(calculateThreadStats);
+
+            return threads;
+        }
 
         // Load conversation history
         async function loadConversationHistory(searchQuery = null, connectionName = null) {
@@ -6331,7 +6950,7 @@ Always add or update the version number on the dashboards or index or scripts wi
 
             try {
                 // Use the HTTP API on port 8891 (central conversation server)
-                const apiUrl = `http://${window.location.hostname}:8891/api/sessions/grouped`;
+                const apiUrl = `${CONVERSATION_API_URL}/sessions/grouped`;
 
                 const response = await fetch(apiUrl);
                 if (!response.ok) {
@@ -6350,7 +6969,7 @@ Always add or update the version number on the dashboards or index or scripts wi
 
                 historyList.innerHTML = '';
 
-                // Add "Recent" section at the top with most recent 10 sessions across all connections
+                // Build threaded sessions (group by parent-child)
                 const allSessions = [];
                 for (const [connName, directories] of Object.entries(groupedData)) {
                     for (const [dirName, sessions] of Object.entries(directories)) {
@@ -6362,26 +6981,29 @@ Always add or update the version number on the dashboards or index or scripts wi
                     }
                 }
 
-                // Sort all sessions by latest_message (most recent first)
-                allSessions.sort((a, b) => {
-                    const timeA = a.latest_message || a.last_modified || '0';
-                    const timeB = b.latest_message || b.last_modified || '0';
+                // Convert to threads
+                const allThreads = buildSessionThreads(allSessions);
+
+                // Sort threads by latest activity (most recent first)
+                allThreads.sort((a, b) => {
+                    const timeA = a._threadLatestTime || '0';
+                    const timeB = b._threadLatestTime || '0';
                     return timeB.localeCompare(timeA);
                 });
 
-                // Show Recent section with top 10
-                if (allSessions.length > 0) {
+                // Show Recent section with top 10 threads
+                if (allThreads.length > 0) {
                     const recentSection = document.createElement('div');
                     recentSection.style.cssText = 'margin-bottom: 20px; padding-bottom: 15px; border-bottom: 2px solid #3a3a3a;';
 
                     const recentHeader = document.createElement('div');
                     recentHeader.style.cssText = 'font-weight: 700; color: #6ac259; margin-bottom: 10px; font-size: 14px; padding: 8px; background: #2a3a2a; border-radius: 5px; border-left: 4px solid #6ac259;';
-                    recentHeader.textContent = `⭐ Recent (${Math.min(10, allSessions.length)})`;
+                    recentHeader.textContent = `⭐ Recent (${Math.min(10, allThreads.length)})`;
                     recentSection.appendChild(recentHeader);
 
-                    allSessions.slice(0, 10).forEach(session => {
-                        const sessionEl = createHistorySessionItem(session, true);
-                        recentSection.appendChild(sessionEl);
+                    allThreads.slice(0, 10).forEach(thread => {
+                        const threadEl = createThreadItem(thread, true);
+                        recentSection.appendChild(threadEl);
                     });
 
                     historyList.appendChild(recentSection);
@@ -6417,19 +7039,27 @@ Always add or update the version number on the dashboards or index or scripts wi
 
                     connSection.appendChild(connHeader);
 
-                    // Render each directory group
+                    // Render each directory group (with threading)
                     for (const [dirName, sessions] of Object.entries(directories)) {
                         const dirGroup = document.createElement('div');
                         dirGroup.style.cssText = 'margin-bottom: 12px; margin-left: 10px; padding-left: 10px; border-left: 2px solid #3a3a3a;';
 
+                        // Build threads for this directory
+                        const dirThreads = buildSessionThreads(sessions);
+                        dirThreads.sort((a, b) => {
+                            const timeA = a._threadLatestTime || '0';
+                            const timeB = b._threadLatestTime || '0';
+                            return timeB.localeCompare(timeA);
+                        });
+
                         const dirHeader = document.createElement('div');
                         dirHeader.style.cssText = 'font-weight: 500; color: #888; margin-bottom: 8px; font-size: 12px; padding: 5px; font-family: monospace;';
-                        dirHeader.textContent = `📂 ${dirName} (${sessions.length})`;
+                        dirHeader.textContent = `📂 ${dirName} (${dirThreads.length} thread${dirThreads.length !== 1 ? 's' : ''})`;
                         dirGroup.appendChild(dirHeader);
 
-                        sessions.forEach(session => {
-                            const sessionEl = createHistorySessionItem(session, false);
-                            dirGroup.appendChild(sessionEl);
+                        dirThreads.forEach(thread => {
+                            const threadEl = createThreadItem(thread, false);
+                            dirGroup.appendChild(threadEl);
                         });
 
                         directoriesContainer.appendChild(dirGroup);
@@ -6526,6 +7156,102 @@ Always add or update the version number on the dashboards or index or scripts wi
             });
 
             return item;
+        }
+
+        // Create thread item (shows root session with continuation count)
+        function createThreadItem(thread, showConnectionInfo = false) {
+            const container = document.createElement('div');
+            container.style.cssText = 'margin-bottom: 8px;';
+
+            // Create the root session item
+            const rootItem = document.createElement('div');
+            rootItem.style.cssText = 'background: #2d2d2d; border: 1px solid #3a3a3a; border-radius: 5px; padding: 10px; cursor: pointer; transition: all 0.2s;';
+
+            const title = thread.custom_title || thread.session_id.substring(0, 8);
+            const threadMessageCount = thread._threadMessageCount || thread.message_count || 0;
+            const timestamp = thread._threadLatestTime || thread.latest_message || thread.last_modified;
+            const lastModified = timestamp ? new Date(timestamp) : new Date();
+            const timeAgo = formatTimeAgo(lastModified);
+            const cwd = thread.cwd || 'N/A';
+            const continuationCount = thread.children.length;
+
+            let connectionInfo = '';
+            if (showConnectionInfo && thread._connection) {
+                connectionInfo = `<div style="font-size: 10px; color: #6ac259; margin-bottom: 3px;">🖥️ ${thread._connection}</div>`;
+            }
+
+            // Thread indicator (if has continuations)
+            let threadIndicator = '';
+            if (continuationCount > 0) {
+                threadIndicator = `<span style="padding: 2px 6px; background: #6ac25922; color: #6ac259; border-radius: 3px; border: 1px solid #6ac25944; font-size: 10px; margin-left: 6px;">🔗 ${continuationCount} continuation${continuationCount !== 1 ? 's' : ''}</span>`;
+            }
+
+            // Project tags from database
+            let projectTagsHtml = '';
+            if (thread.project_tags) {
+                try {
+                    const tags = typeof thread.project_tags === 'string' ? JSON.parse(thread.project_tags) : thread.project_tags;
+                    if (Array.isArray(tags) && tags.length > 0) {
+                        projectTagsHtml = `
+                            <div style="font-size: 10px; margin-top: 4px; display: flex; align-items: center; gap: 4px; flex-wrap: wrap;">
+                                ${tags.map(tag => `<span style="padding: 2px 6px; background: ${tag.color || '#4a9eff'}22; color: ${tag.color || '#4a9eff'}; border-radius: 3px; border: 1px solid ${tag.color || '#4a9eff'}44;">${tag.name}</span>`).join('')}
+                            </div>
+                        `;
+                    }
+                } catch (e) {
+                    console.error('Error parsing project_tags:', e);
+                }
+            }
+
+            rootItem.innerHTML = `
+                ${connectionInfo}
+                <div style="font-weight: 600; margin-bottom: 5px; color: #e0e0e0;">
+                    ${title} ${threadIndicator}
+                </div>
+                <div style="font-size: 11px; color: #888; margin-bottom: 3px;">
+                    💬 ${threadMessageCount} messages · ⏱️ ${timeAgo}
+                </div>
+                <div style="font-size: 10px; color: #666; font-family: monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    📂 ${cwd}
+                </div>
+                <div style="font-size: 10px; color: #666; margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                    ${thread.session_id}
+                </div>
+                ${projectTagsHtml}
+            `;
+
+            rootItem.addEventListener('mouseenter', () => {
+                rootItem.style.background = '#3a3a3a';
+                rootItem.style.borderColor = '#4a9eff';
+            });
+
+            rootItem.addEventListener('mouseleave', () => {
+                rootItem.style.background = '#2d2d2d';
+                rootItem.style.borderColor = '#3a3a3a';
+            });
+
+            rootItem.addEventListener('click', () => {
+                viewConversationMessages(thread.session_id, title);
+            });
+
+            container.appendChild(rootItem);
+
+            // Show continuations if expanded (optional - could add toggle)
+            if (continuationCount > 0 && false) { // Disabled by default, can enable with toggle
+                const continuationsDiv = document.createElement('div');
+                continuationsDiv.style.cssText = 'margin-left: 20px; margin-top: 4px; padding-left: 10px; border-left: 2px solid #3a3a3a55;';
+
+                thread.children.forEach((child, idx) => {
+                    const childItem = createHistorySessionItem(child, false);
+                    childItem.style.marginBottom = idx === thread.children.length - 1 ? '0' : '4px';
+                    childItem.style.opacity = '0.8';
+                    continuationsDiv.appendChild(childItem);
+                });
+
+                container.appendChild(continuationsDiv);
+            }
+
+            return container;
         }
 
         // View conversation messages in modal
@@ -6786,26 +7512,34 @@ Always add or update the version number on the dashboards or index or scripts wi
 
             // Get sessions from all connections for displaying in projects
             const connTab = state.connectionTabs[state.activeConnectionTab];
-            let sessions = (connTab && connTab.sessions) ? connTab.sessions : [];
+            let sessionsData = (connTab && connTab.sessions) ? connTab.sessions : null;
 
             // If no sessions loaded yet, try to load from localStorage
-            if (!sessions || sessions.length === 0) {
+            if (!sessionsData) {
                 const cached = localStorage.getItem(`sessions_${state.activeConnectionTab}`);
                 if (cached) {
                     try {
-                        sessions = JSON.parse(cached);
+                        sessionsData = JSON.parse(cached);
                         console.log('Loaded sessions from localStorage cache');
                     } catch (e) {
                         console.error('Error parsing cached sessions:', e);
-                        sessions = [];
+                        sessionsData = null;
                     }
                 }
             }
 
-            // Ensure sessions is an array
-            if (!Array.isArray(sessions)) {
-                console.warn('Sessions is not an array, converting:', sessions);
-                sessions = [];
+            // Flatten sessions from the structured format {projects: {...}} to a flat array
+            let sessions = [];
+            if (sessionsData && sessionsData.projects) {
+                const projects = sessionsData.projects;
+                for (const [projectName, projectData] of Object.entries(projects)) {
+                    const directories = projectData.directories || {};
+                    for (const [dirPath, sessionsList] of Object.entries(directories)) {
+                        if (Array.isArray(sessionsList)) {
+                            sessions = sessions.concat(sessionsList);
+                        }
+                    }
+                }
             }
 
             projectsList.innerHTML = '';
@@ -9153,8 +9887,8 @@ Always add or update the version number on the dashboards or index or scripts wi
 
             // Just show both versions without fetching
             // User can update BRIDGE_VERSION constant when they update the deployment server
-            versionInfo.innerHTML = `Web v${WEB_APP_VERSION} | Bridge v${BRIDGE_VERSION}`;
-            versionInfo.title = `Web Interface (port 8889): v${WEB_APP_VERSION}\nBridge Deployment (port 8890): v${BRIDGE_VERSION}`;
+            versionInfo.innerHTML = `Web v${WEB_APP_VERSION} | Bridge v${BRIDGE_VERSION} (🐧 Linux / 🪟 Windows)`;
+            versionInfo.title = `Web Interface (port 8889): v${WEB_APP_VERSION}\nBridge Deployment (port 8890): v${BRIDGE_VERSION}\nSupports: Linux, Windows, macOS`;
         }
 
         // Initialize connection tab drag-and-drop
@@ -9444,6 +10178,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             document.getElementById('connectionSettingsBtn').addEventListener('click', showSelectedConnectionSettings);
             document.getElementById('connectionForm').addEventListener('submit', saveConnection);
             document.getElementById('cancelBtn').addEventListener('click', hideConnectionModal);
+            document.getElementById('deleteConnectionBtn').addEventListener('click', deleteConnection);
 
             // Add new session button handler
             document.getElementById('newSessionBtn').addEventListener('click', showNewSessionModal);

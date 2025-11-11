@@ -235,11 +235,12 @@
 
         .session-item {
             margin-left: 40px;
-            padding: 8px 10px;
+            padding: 8px 40px 8px 10px;  /* Extra right padding for star button */
             cursor: pointer;
             border-radius: 5px;
             margin-bottom: 5px;
             transition: background 0.2s;
+            position: relative;  /* For absolute positioning of star */
         }
 
         .session-item:hover {
@@ -248,6 +249,42 @@
 
         .session-item.active {
             background: #4a9eff;
+        }
+
+        .session-thread {
+            margin-bottom: 2px;
+        }
+
+        .session-thread .session-item {
+            margin-bottom: 2px;
+        }
+
+        .favorite-btn {
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            cursor: pointer;
+            font-size: 20px;
+            opacity: 0.6;
+            transition: opacity 0.2s, transform 0.1s;
+            z-index: 10;
+            user-select: none;
+            color: #ffd700;
+            text-shadow: 0 0 2px rgba(0,0,0,0.5);
+        }
+
+        .session-item:hover .favorite-btn {
+            opacity: 1;
+        }
+
+        .favorite-btn:hover {
+            opacity: 1 !important;
+            transform: translateY(-50%) scale(1.4);
+        }
+
+        .favorite-btn:active {
+            transform: translateY(-50%) scale(0.9);
         }
 
         .session-preview {
@@ -1193,6 +1230,39 @@
             addSystemMessage('Refreshing sessions...');
         }
 
+        function buildSessionTrees(sessions) {
+            // Build a tree structure from flat session list
+            const sessionMap = new Map();
+            const rootSessions = [];
+
+            console.log(`[buildSessionTrees] Processing ${sessions.length} sessions`);
+
+            // First pass: create map of all sessions
+            sessions.forEach(session => {
+                sessionMap.set(session.session_id, { ...session, children: [] });
+                if (session.parent_session_id) {
+                    console.log(`  Session ${session.session_id.substring(0, 8)}... has parent ${session.parent_session_id.substring(0, 8)}...`);
+                }
+            });
+
+            // Second pass: build parent-child relationships
+            sessions.forEach(session => {
+                const sessionNode = sessionMap.get(session.session_id);
+                if (session.parent_session_id && sessionMap.has(session.parent_session_id)) {
+                    // This is a child session
+                    const parent = sessionMap.get(session.parent_session_id);
+                    parent.children.push(sessionNode);
+                    console.log(`  Linked child ${session.session_id.substring(0, 8)}... to parent ${session.parent_session_id.substring(0, 8)}...`);
+                } else {
+                    // This is a root session
+                    rootSessions.push(sessionNode);
+                }
+            });
+
+            console.log(`[buildSessionTrees] Found ${rootSessions.length} root sessions`);
+            return rootSessions;
+        }
+
         function renderSessionsList() {
             const container = document.getElementById('sessionsList');
             container.innerHTML = '';
@@ -1224,11 +1294,23 @@
                 });
             });
 
-            // Sort by last_modified and get top 10
+            // Build session trees to group continuations
+            const sessionTrees = buildSessionTrees(allSessions);
+
+            // Sort by last_modified
             allSessions.sort((a, b) => {
                 return new Date(b.last_modified) - new Date(a.last_modified);
             });
+
+            // Filter favorites
+            const favoriteSessions = allSessions.filter(s => s.is_favorite);
             const recentSessions = allSessions.slice(0, 10);
+
+            // Render favorites section if there are any
+            if (favoriteSessions.length > 0) {
+                const favoritesSection = createFavoritesSection(favoriteSessions);
+                container.appendChild(favoritesSection);
+            }
 
             // Render recent sessions section if there are any
             if (recentSessions.length > 0) {
@@ -1253,13 +1335,43 @@
             }
         }
 
+        function createFavoritesSection(sessions) {
+            const section = document.createElement('div');
+            section.className = 'project-section favorites-section';
+
+            const header = document.createElement('div');
+            header.className = 'project-header';
+            header.innerHTML = `<span class="expand-icon">▼</span> ⭐ Favorites`;
+            header.style.fontWeight = 'bold';
+            header.style.color = '#ffd700';
+
+            const content = document.createElement('div');
+            content.className = 'directory-content';
+            content.style.marginLeft = '20px';
+
+            sessions.forEach(session => {
+                const item = createSessionItem(session, session.projectName, session.dirPath);
+                content.appendChild(item);
+            });
+
+            header.addEventListener('click', () => {
+                const isCollapsed = content.style.display === 'none';
+                content.style.display = isCollapsed ? 'block' : 'none';
+                header.querySelector('.expand-icon').textContent = isCollapsed ? '▼' : '▶';
+            });
+
+            section.appendChild(header);
+            section.appendChild(content);
+            return section;
+        }
+
         function createRecentSessionsSection(sessions) {
             const section = document.createElement('div');
             section.className = 'project-section recent-section';
 
             const header = document.createElement('div');
             header.className = 'project-header';
-            header.innerHTML = `<span class="expand-icon">▼</span> ⭐ Recent Chats`;
+            header.innerHTML = `<span class="expand-icon">▼</span> 🕒 Recent Chats`;
             header.style.fontWeight = 'bold';
             header.style.color = '#4dabf7';
 
@@ -1323,8 +1435,12 @@
             const content = document.createElement('div');
             content.className = 'directory-content';
 
-            sessions.forEach(session => {
-                const item = createSessionItem(session, projectName, dirPath);
+            // Build session trees to show threaded conversations
+            const sessionTrees = buildSessionTrees(sessions);
+
+            // Render root sessions and their children
+            sessionTrees.forEach(sessionTree => {
+                const item = createSessionWithChildren(sessionTree, projectName, dirPath);
                 content.appendChild(item);
             });
 
@@ -1351,8 +1467,12 @@
             content.className = 'directory-content';
             content.style.marginLeft = '20px';
 
-            sessions.forEach(session => {
-                const item = createSessionItem(session, null, session.directory);
+            // Build session trees to show threaded conversations
+            const sessionTrees = buildSessionTrees(sessions);
+
+            // Render root sessions and their children
+            sessionTrees.forEach(sessionTree => {
+                const item = createSessionWithChildren(sessionTree, null, sessionTree.directory);
                 content.appendChild(item);
             });
 
@@ -1367,32 +1487,100 @@
             return section;
         }
 
-        function createSessionItem(session, projectName, dirPath) {
+        function createSessionItem(session, projectName, dirPath, depth = 0) {
             const item = document.createElement('div');
             item.className = 'session-item';
             if (state.activeSessionId === session.session_id) {
                 item.classList.add('active');
             }
 
+            // Add indentation for child sessions
+            if (depth > 0) {
+                item.style.marginLeft = `${depth * 20}px`;
+                item.style.borderLeft = '2px solid #4dabf7';
+                item.style.paddingLeft = '10px';
+            }
+
             const preview = document.createElement('div');
             preview.className = 'session-preview';
-            preview.textContent = session.preview || 'No preview';
+            // Add thread indicator for child sessions
+            const threadIndicator = depth > 0 ? '↳ ' : '';
+            preview.textContent = threadIndicator + (session.preview || 'No preview');
 
             const meta = document.createElement('div');
             meta.className = 'session-meta';
+
+            // Show children count if available
+            const childrenInfo = session.children && session.children.length > 0
+                ? ` · ${session.children.length} continuation${session.children.length > 1 ? 's' : ''}`
+                : '';
+
             meta.innerHTML = `
                 <span>${formatRelativeTime(session.last_modified)}</span>
-                <span>${session.message_count || 0} messages</span>
+                <span>${session.message_count || 0} messages${childrenInfo}</span>
             `;
+
+            // Add favorite star button (default to not favorite if undefined)
+            const isFavorite = session.is_favorite === 1 || session.is_favorite === true;
+            const favoriteBtn = document.createElement('div');
+            favoriteBtn.className = 'favorite-btn';
+            favoriteBtn.innerHTML = isFavorite ? '⭐' : '☆';
+            favoriteBtn.title = isFavorite ? 'Remove from favorites' : 'Add to favorites';
+
+            console.log('Created favorite button for session:', session.session_id, 'isFavorite:', isFavorite);
+
+            favoriteBtn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                console.log('Favorite button clicked for:', session.session_id);
+                await toggleFavorite(session.session_id);
+            });
 
             item.appendChild(preview);
             item.appendChild(meta);
+            item.appendChild(favoriteBtn);
 
-            item.addEventListener('click', () => {
+            item.addEventListener('click', (e) => {
+                e.stopPropagation();
                 loadSession(session.session_id, projectName, dirPath);
             });
 
             return item;
+        }
+
+        async function toggleFavorite(sessionId) {
+            try {
+                const apiUrl = `${window.location.protocol}//${window.location.hostname}:8889/api/conversations/${sessionId}/favorite`;
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'}
+                });
+
+                if (response.ok) {
+                    // Refresh sessions list to show updated favorite status
+                    sendWebSocketMessage({ type: 'discover_sessions' });
+                }
+            } catch (error) {
+                console.error('Error toggling favorite:', error);
+            }
+        }
+
+        function createSessionWithChildren(session, projectName, dirPath, depth = 0) {
+            const container = document.createElement('div');
+            container.className = 'session-thread';
+
+            // Create the main session item
+            const item = createSessionItem(session, projectName, dirPath, depth);
+            container.appendChild(item);
+
+            // Recursively add children
+            if (session.children && session.children.length > 0) {
+                session.children.forEach(child => {
+                    const childContainer = createSessionWithChildren(child, projectName, dirPath, depth + 1);
+                    container.appendChild(childContainer);
+                });
+            }
+
+            return container;
         }
 
         function loadSession(sessionId, projectName, dirPath) {

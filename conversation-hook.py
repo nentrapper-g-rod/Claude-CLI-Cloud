@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Claude CLI Hook for Conversation Logging
+Claude CLI Hook for Conversation Logging (OPTIMIZED)
 Captures user prompts and assistant responses and saves to database
-Also sends to central server for aggregation
+Also sends to central server for aggregation - ALL ASYNC/NON-BLOCKING
 """
 
 import json
@@ -12,12 +12,18 @@ from pathlib import Path
 from datetime import datetime
 import urllib.request
 import urllib.error
+import subprocess
+import threading
+import re
 
 # Add the path to conversation_db module
 sys.path.insert(0, '/opt/Claude-CLI-Cloud')
 
 # Central server for conversation aggregation
 CENTRAL_SERVER = os.environ.get('CLAUDE_CENTRAL_SERVER', 'http://100.94.187.56:8891')
+
+# Cache for server availability (avoid repeated connection attempts)
+_server_available_cache = {'available': None, 'last_check': 0}
 
 def is_central_server():
     """Check if this machine IS the central server to avoid duplicate writes"""
@@ -44,28 +50,94 @@ def is_central_server():
     except:
         return False
 
-def send_to_central_server(session_data):
-    """Send session data to central server for aggregation (only from remote clients)"""
-    # Don't send to central server if WE ARE the central server (prevents duplicates)
-    if is_central_server():
-        return None
+def is_server_available():
+    """Check if central server is available (with caching to avoid repeated checks)"""
+    import time
 
+    current_time = time.time()
+    cache_duration = 60  # Cache for 60 seconds
+
+    # Use cached result if available and recent
+    if _server_available_cache['available'] is not None:
+        if current_time - _server_available_cache['last_check'] < cache_duration:
+            return _server_available_cache['available']
+
+    # Quick check if server is reachable
     try:
-        data = json.dumps(session_data).encode('utf-8')
-        req = urllib.request.Request(
-            f'{CENTRAL_SERVER}/api/conversations/sync',
-            data=data,
-            headers={'Content-Type': 'application/json'},
-            method='POST'
-        )
-        with urllib.request.urlopen(req, timeout=5) as response:
-            return response.read()
-    except Exception as e:
-        # Log but don't fail - local DB is primary
-        debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
-        with open(debug_log, 'a') as f:
-            f.write(f"[{datetime.now().isoformat()}] Failed to send to central server: {e}\n")
-        return None
+        req = urllib.request.Request(f'{CENTRAL_SERVER}/api/connections/list', method='HEAD')
+        with urllib.request.urlopen(req, timeout=0.5) as response:
+            available = response.status == 200
+    except:
+        available = False
+
+    _server_available_cache['available'] = available
+    _server_available_cache['last_check'] = current_time
+    return available
+
+def send_to_central_server_async(session_data):
+    """Send session data to central server asynchronously (non-blocking)"""
+    def _send():
+        try:
+            # Don't send if we ARE the central server or server is unavailable
+            if is_central_server() or not is_server_available():
+                return
+
+            data = json.dumps(session_data).encode('utf-8')
+            req = urllib.request.Request(
+                f'{CENTRAL_SERVER}/api/conversations/sync',
+                data=data,
+                headers={'Content-Type': 'application/json'},
+                method='POST'
+            )
+            with urllib.request.urlopen(req, timeout=2) as response:
+                pass  # Just fire and forget
+        except:
+            pass  # Silently fail - don't log to avoid I/O blocking
+
+    # Run in background thread so it doesn't block
+    thread = threading.Thread(target=_send, daemon=True)
+    thread.start()
+
+def normalize_path(path):
+    """Normalize path for comparison - remove leading slashes and convert to lowercase"""
+    if not path:
+        return ""
+    # Remove leading double slashes
+    path = re.sub(r'^/+', '/', path)
+    # Convert forward slashes to a common format for comparison
+    return path.lower().strip('/')
+
+def paths_match(session_cwd, project_dir):
+    """Check if session cwd matches or starts with project directory"""
+    session_norm = normalize_path(session_cwd)
+    project_norm = normalize_path(project_dir)
+
+    # Direct match
+    if session_norm.startswith(project_norm):
+        return True
+
+    # Try replacing hyphens with slashes and vice versa
+    project_with_slashes = project_norm.replace('-', '/')
+    project_with_hyphens = project_norm.replace('/', '-')
+
+    if session_norm.startswith(project_with_slashes):
+        return True
+    if session_norm.startswith(project_with_hyphens):
+        return True
+
+    return False
+
+def async_log(message):
+    """Non-blocking debug logging"""
+    def _log():
+        try:
+            debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
+            with open(debug_log, 'a') as f:
+                f.write(f"[{datetime.now().isoformat()}] {message}\n")
+        except:
+            pass  # Silently fail
+    thread = threading.Thread(target=_log, daemon=True)
+    thread.start()
 
 try:
     from conversation_db import get_db
@@ -73,11 +145,8 @@ try:
     # Read hook data from stdin
     hook_data = json.load(sys.stdin)
 
-    # Debug logging
-    debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
-    with open(debug_log, 'a') as f:
-        f.write(f"\n[{datetime.now().isoformat()}] Hook event: {hook_data.get('hook_event_name')}\n")
-        f.write(f"Hook data: {json.dumps(hook_data, indent=2)}\n")
+    # Debug logging (async, non-blocking)
+    async_log(f"Hook event: {hook_data.get('hook_event_name')}")
 
     event_name = hook_data.get('hook_event_name', '')
 
@@ -105,16 +174,41 @@ try:
 
     db = get_db()
 
-    # Ensure session exists
+    # Auto-tag projects based on directory (with flexible path matching)
+    project_tags = []
+    try:
+        custom_projects_path = Path.home() / '.claude' / 'custom_projects.json'
+        if custom_projects_path.exists():
+            with open(custom_projects_path, 'r') as f:
+                custom_projects = json.load(f)
+                for proj in custom_projects:
+                    # Check if cwd matches any project directories
+                    proj_dirs = proj.get('directories', [])
+                    if proj.get('working_directory'):
+                        proj_dirs.append(proj['working_directory'])
+
+                    for proj_dir in proj_dirs:
+                        if cwd and paths_match(cwd, proj_dir):
+                            project_tags.append({
+                                'id': proj['id'],
+                                'name': proj['name'],
+                                'color': proj.get('color', '#4a9eff')
+                            })
+                            break
+    except Exception as e:
+        async_log(f"Error loading project tags: {e}")
+
+    # Ensure session exists (with project tags)
     db.upsert_session(
         session_id=session_id,
         connection_name=connection_name,
         project=project,
-        cwd=cwd
+        cwd=cwd,
+        project_tags=project_tags
     )
 
-    # Send session info to central server
-    send_to_central_server({
+    # Send session info to central server (async, non-blocking)
+    send_to_central_server_async({
         'session_id': session_id,
         'connection_name': connection_name,
         'project': project,
@@ -150,8 +244,8 @@ try:
                 cwd=cwd
             )
 
-            # Send to central server
-            send_to_central_server({
+            # Send to central server (async, non-blocking)
+            send_to_central_server_async({
                 'session_id': session_id,
                 'connection_name': connection_name,
                 'messages': message_data,
@@ -210,13 +304,8 @@ try:
                     except json.JSONDecodeError:
                         continue
 
-                # Debug logging
-                with open(debug_log, 'a') as f:
-                    f.write(f"Total assistant messages in transcript: {assistant_count}\n")
-                    f.write(f"Already saved: {len(existing_uuids)}\n")
-                    f.write(f"New messages to save: {len(new_messages)}\n")
-                    if new_messages:
-                        f.write(f"First new message UUID: {new_messages[0].get('uuid')}\n")
+                # Debug logging (async, non-blocking)
+                async_log(f"Total: {assistant_count}, Already saved: {len(existing_uuids)}, New: {len(new_messages)}")
 
                 # Save all new messages
                 if new_messages:
@@ -243,11 +332,10 @@ try:
                             project=project,
                             cwd=cwd
                         )
-                        with open(debug_log, 'a') as f:
-                            f.write(f"Successfully saved {len(messages_to_save)} messages\n")
+                        async_log(f"Saved {len(messages_to_save)} messages")
 
-                        # Send to central server
-                        send_to_central_server({
+                        # Send to central server (async, non-blocking)
+                        send_to_central_server_async({
                             'session_id': session_id,
                             'connection_name': connection_name,
                             'messages': messages_to_save,
@@ -255,10 +343,8 @@ try:
                             'cwd': cwd
                         })
             except Exception as e:
-                # Log error but continue
-                with open(debug_log, 'a') as f:
-                    f.write(f"Error reading transcript: {e}\n")
-                print(f"Error reading transcript: {e}", file=sys.stderr)
+                # Log error but continue (async)
+                async_log(f"Error reading transcript: {e}")
 
         # Update session timestamp
         db.upsert_session(
