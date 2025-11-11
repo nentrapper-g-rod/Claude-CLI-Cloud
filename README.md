@@ -180,6 +180,187 @@ python3 -m http.server 8080
 # Then visit: http://localhost:8080
 ```
 
+## User Interface Overview
+
+### Main Interface
+
+![Main Interface](screenshots/ui-main-interface.png)
+
+The Claude CLI Cloud interface features a powerful three-panel layout designed for efficient session management and conversation flow:
+
+#### **Left Navigation Panel**
+
+The left sidebar provides comprehensive session organization and quick access controls:
+
+**Connection Tabs**
+- Switch between multiple connected machines (Steel Server, CM Webserver, Recycle Server, etc.)
+- Each connection shows real-time status and version information
+- Color-coded tabs for easy visual identification
+
+**Action Menu** (⚡ Actions Menu button)
+- **Add**: Create new connections to bridge servers
+- **Edit**: Modify existing connection settings
+- **Settings**: Configure global application preferences and personal preferences
+
+**Favorites Section** (⭐ Favorites)
+- Pin important sessions for quick access
+- Star icon on each session to add/remove from favorites
+- Sessions remain accessible across all connections
+- Empty state message guides new users
+- Shows session count: "Favorites (6)"
+
+**Project-Based Organization**
+- Sessions automatically grouped by project
+- Color-coded project cards with expandable/collapsible sections
+- Each project shows:
+  - Project name and working directory
+  - Quick action buttons (Explorer, Editor, Push to Git, History)
+  - Session count and last activity
+  - Directory structure within projects
+
+**Context History**
+- Recent session access history
+- Quick navigation to previously opened sessions
+- Timestamp and project information
+
+**Recent Sessions** (🕐 Recent)
+- Last 5 accessed sessions
+- Quick reload capability
+- Session metadata preview
+
+**System Information** (Bottom of sidebar)
+- Real-time CPU and RAM usage for connected server
+- Disk space monitoring
+- Visual gauges with percentage indicators
+
+#### **Center Chat Panel**
+
+The main conversation area with:
+- Real-time streaming responses from Claude
+- Message history with user/assistant distinction
+- Code blocks with syntax highlighting
+- Tool use notifications
+- Error handling and status messages
+- Input area with file attachment support
+
+#### **Top Connection Bar**
+
+- Active connection indicator
+- Connection tabs for switching between machines
+- Settings button (⚙️)
+- Deploy button (📦) for bridge server deployment
+
+### Projects View
+
+![Projects View](screenshots/ui-projects-view.png)
+
+The Projects tab provides advanced project management:
+
+**Project Cards**
+Each project displays as an organized card with:
+- **Color-coded headers** for visual organization
+- **Quick Action Buttons**:
+  - 🔍 **Explorer**: Browse project file structure
+  - ✏️ **Editor**: Edit project files with integrated editor
+  - 📤 **Push to Git**: Push changes with Git Exclusions support
+  - 📜 **History**: View git commit history
+  - 📝 **Edit Docs**: Edit README, SECURITY.md, CONTRIBUTING.md, LICENSE, .gitignore, CHANGELOG.md
+
+**Project Features**:
+- GitHub repository integration
+- GitHub Project board links
+- Working directory management
+- Session auto-discovery based on working directory
+- Expandable session lists within each project
+
+**Create New Project**
+- Button to add new project configurations
+- Assign directories and repositories
+- Configure Git exclusions and tokens
+- Set project colors and descriptions
+
+### Settings Modal
+
+![Settings Modal](screenshots/ui-settings-modal.png)
+
+Comprehensive settings interface with:
+
+**Auto-Connect Options**
+- ✅ Auto connect to all connections on page load/refresh
+- Automatically restores your connection state
+
+**Dangerous Permissions**
+- ⚠️ Skip permissions for dangerously-skip-permissions flag
+- Allows Claude CLI to run with elevated capabilities
+- Use with caution
+
+**Conversation Compacting**
+- Disable automatic conversation compacting
+- Controls how Claude handles long conversation histories
+
+**Personal Preferences**
+- Free-form text area for custom preferences
+- Automatically included in all prompts
+- Persists across sessions
+- Examples:
+  - Development script guidelines
+  - Version control preferences
+  - Code style requirements
+  - Default behaviors and workflows
+
+**Remote Username**
+- Configure username for remote operations
+- Used for bridge server interactions
+
+**Init Script Configuration**
+- Bash script that runs every time the UI connects to a bridge server
+- Useful for MCP servers, environment setup, or startup commands
+- Example uses:
+  - Starting conversation hook scripts
+  - Configuring environment variables
+  - Running setup commands
+
+**Save & Clear Buttons**
+- 💾 Save Settings - Persists all configurations
+- 🗑️ Clear Settings - Resets to defaults
+
+### Deploy Modal
+
+![Deploy Modal](screenshots/ui-deploy-modal.png)
+
+Automated bridge server deployment with platform-specific installers:
+
+**Linux Quick Deploy**
+- One-line installation command
+- Automatically configures SOURCE_SERVER environment variable
+- Downloads and installs dependencies
+- Sets up systemd service
+
+**Windows Quick Deploy**
+- PowerShell installation script
+- Administrator mode instructions
+- Creates Windows Service or Scheduled Task
+- Handles Python dependencies automatically
+
+**What It Does**
+1. Downloads bridge server from source machine
+2. Installs Python dependencies (websockets, aiofiles, etc.)
+3. Stops existing service if upgrading
+4. Creates systemd service with proper logging
+5. Configures machine name and WebSocket port
+6. Enables debug logging for port 8766
+7. Starts the bridge server automatically
+
+**Interactive Installation**
+- Prompts for machine name (e.g., "Production Server")
+- WebSocket port selection (default: 8766)
+- Confirmation before proceeding
+
+**Service Management**
+After installation, bridge server runs as a system service:
+- **Linux**: `systemctl status claude-bridge`
+- **Windows**: `nssm status ClaudeBridge` or Task Scheduler
+
 ## Usage Guide
 
 ### First Time Setup
