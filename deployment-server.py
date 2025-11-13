@@ -31,6 +31,7 @@ SERVED_FILES = {
     '/download/install-mcp-config.sh': 'install-mcp-config.sh',
     '/download/check-remote-sync.sh': 'check-remote-sync.sh',
     '/download/claude-with-connection-name.sh': 'claude-with-connection-name.sh',
+    '/download/xterm-256color-ms.terminfo': 'xterm-256color-ms.terminfo',
     '/install': 'install-bridge.sh',  # Shortcut URL for Linux
     '/install-windows': 'install-bridge.ps1',  # Shortcut URL for Windows
 }
