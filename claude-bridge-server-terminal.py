@@ -1660,9 +1660,9 @@ class ClaudeBridgeTerminalServer:
             asyncio.create_task(self.read_terminal_output(session_id))
             debug_log("Started read_terminal_output task")
 
-            # Start monitoring shell directory
-            asyncio.create_task(self.monitor_shell_directory(session_id))
-            debug_log("Started monitor_shell_directory task")
+            # Disabled: monitor_shell_directory causes blocking subprocess calls every second
+            # asyncio.create_task(self.monitor_shell_directory(session_id))
+            # debug_log("Started monitor_shell_directory task")
 
             # Track open tab
             self.open_tabs[session_id] = {
@@ -1717,10 +1717,10 @@ class ClaudeBridgeTerminalServer:
                             print(f"Error broadcasting to websocket: {e}")
                             terminal.websockets.discard(ws)
 
-                    # Small delay after broadcasting to prevent overwhelming the connection
-                    await asyncio.sleep(0.01)
+                    # Yield control to allow other tasks to run
+                    await asyncio.sleep(0.001)
                 else:
-                    await asyncio.sleep(0.1)
+                    await asyncio.sleep(0.01)
             except Exception as e:
                 print(f"Error reading terminal output: {e}")
                 break
@@ -2585,8 +2585,9 @@ class ClaudeBridgeTerminalServer:
     async def handle_get_metrics(self, websocket):
         """Get server metrics (CPU, RAM, disk, uptime, network I/O)"""
         try:
-            # CPU usage
-            cpu_percent = psutil.cpu_percent(interval=0.1)
+            # CPU usage - use interval=0 to avoid blocking the event loop
+            # This returns the CPU usage since the last call, or 0.0 if first call
+            cpu_percent = psutil.cpu_percent(interval=0)
 
             # Memory usage
             memory = psutil.virtual_memory()

@@ -315,6 +315,21 @@ print("✓ Conversation hooks configured in ~/.claude/settings.json")
 PYEOF
 fi
 
+# Install custom terminfo for xterm-256color-ms
+echo ""
+echo "Installing custom terminfo (xterm-256color-ms)..."
+if curl -f -s "${SOURCE_SERVER}/download/xterm-256color-ms.terminfo" -o /tmp/xterm-256color-ms.terminfo 2>/dev/null; then
+    tic -x /tmp/xterm-256color-ms.terminfo 2>&1
+    if [ $? -eq 0 ]; then
+        echo "✓ Terminfo installed successfully"
+    else
+        echo "⚠ Warning: Failed to install terminfo, shell terminals may have display issues"
+    fi
+    rm -f /tmp/xterm-256color-ms.terminfo
+else
+    echo "⚠ Warning: Could not download terminfo file"
+fi
+
 echo ""
 echo "================================================"
 echo "  Installation Complete!"
