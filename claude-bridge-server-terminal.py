@@ -4,7 +4,7 @@ Remote Claude CLI Bridge Server (Terminal Mode)
 Purpose: WebSocket server that relays between web UI and actual Claude CLI process
 """
 
-VERSION = "2.16.0"  # Multi-platform support: Windows, Linux, macOS with auto-detection
+VERSION = "2.22.13"  # Fixed deployment server port 8890→8888
 
 import asyncio
 import websockets
@@ -64,7 +64,13 @@ def debug_log(message: str):
     """Print debug messages if debug mode is enabled"""
     if DEBUG_MODE:
         timestamp = datetime.now().isoformat()
-        print(f"[DEBUG {timestamp}] {message}", flush=True)
+        try:
+            print(f"[DEBUG {timestamp}] {message}", flush=True)
+        except UnicodeEncodeError:
+            # Windows console may not support all Unicode characters
+            # Replace problematic characters with ASCII alternatives
+            safe_message = message.encode('ascii', errors='replace').decode('ascii')
+            print(f"[DEBUG {timestamp}] {safe_message}", flush=True)
 
 def get_platform() -> str:
     """Detect and return the current platform"""
@@ -261,23 +267,13 @@ class ClaudeTerminalSession:
         if self.skip_permissions:
             claude_args.append('--dangerously-skip-permissions')
 
-        # Personal preferences disabled for session entry
-        # if self.personal_preferences and self.personal_preferences.strip():
-        #     system_prompt = f"Personal preferences to consider:\n\n{self.personal_preferences}"
-        #     claude_args.extend(['--append-system-prompt', system_prompt])
-
         # If project directory is specified, change to it first
         if self.project_dir and os.path.isdir(self.project_dir):
-            # Use bash -c with cd, passing arguments through the environment is safer
-            # But actually, let's just set the working directory for the tmux session
-            tmux_cmd = claude_args
             working_dir = self.project_dir
         else:
-            tmux_cmd = claude_args
             working_dir = None
 
         # Create detached tmux session with Claude CLI
-        # Note: We need to run through bash -l to get proper PATH with nvm, etc.
         try:
             # Check if session already exists
             check_result = subprocess.run(
@@ -293,42 +289,36 @@ class ClaudeTerminalSession:
                     'tmux', 'new-session',
                     '-d',  # Detached
                     '-s', self.tmux_session_name,
-                    '-x', '80',  # Initial width (will be resized later)
+                    '-x', '80',  # Initial width
                     '-y', '24',  # Initial height
                 ]
 
-                # Add working directory if specified
                 if working_dir:
                     tmux_base_cmd.extend(['-c', working_dir])
 
-                # Set connection name environment variable for the session
-                # We need to do this before starting the command
                 tmux_base_cmd.extend(['-e', f'CLAUDE_CONNECTION_NAME={self.connection_name}'])
+                tmux_base_cmd.extend(['-e', 'TERM=xterm-256color-ms'])  # Set TERM with Ms capability
 
-                # Set MCP configuration path (if it exists)
                 mcp_config_path = os.path.expanduser('~/.config/claude/mcp_config.json')
                 if os.path.exists(mcp_config_path):
                     tmux_base_cmd.extend(['-e', f'MCP_CONFIG_FILE={mcp_config_path}'])
 
-                # Run command through bash -l to get proper PATH
-                # Instead of trying to quote everything, exec the command directly
-                # by building an array and using bash's "$@" expansion
-                # This avoids all quoting issues
                 final_cmd = tmux_base_cmd + ['bash', '-l', '-c', 'exec "$@"', '--'] + claude_args
 
                 subprocess.run(final_cmd, check=True, timeout=5)
-                print(f"[{datetime.now().isoformat()}] Created tmux session: {self.tmux_session_name} with connection name: {self.connection_name}")
+                print(f"[{datetime.now().isoformat()}] Created tmux session: {self.tmux_session_name}")
 
-                # Configure tmux status bar position (top instead of bottom)
+                # Configure tmux
                 subprocess.run([
                     'tmux', 'set-option', '-t', self.tmux_session_name,
                     'status-position', 'top'
                 ], timeout=2)
 
-                # Enable mouse support for scrolling with Shift+scroll
+                # Mouse off: let terminal (xterm.js) handle selection and clipboard
+                # This matches Recycle's config and allows browser clipboard to work
                 subprocess.run([
                     'tmux', 'set-option', '-t', self.tmux_session_name,
-                    'mouse', 'on'
+                    'mouse', 'off'
                 ], timeout=2)
             else:
                 print(f"[{datetime.now().isoformat()}] Attaching to existing tmux session: {self.tmux_session_name}")
@@ -337,18 +327,15 @@ class ClaudeTerminalSession:
             print(f"[{datetime.now().isoformat()}] Failed to create tmux session: {e}")
             raise
 
-        # Small delay to let tmux session start
         await asyncio.sleep(0.1)
 
-        # Now create a PTY that attaches to the tmux session
+        # Create PTY that attaches to tmux
         self.pid, self.master_fd = pty.fork()
 
         if self.pid == 0:
-            # Child process - attach to tmux session
             os.environ['TERM'] = 'xterm-256color'
             os.execvp('tmux', ['tmux', 'attach', '-t', self.tmux_session_name])
         else:
-            # Parent process - make non-blocking
             flags = fcntl.fcntl(self.master_fd, fcntl.F_GETFL)
             fcntl.fcntl(self.master_fd, fcntl.F_SETFL, flags | os.O_NONBLOCK)
             print(f"[{datetime.now().isoformat()}] Started Claude CLI for session {self.session_id} (PID: {self.pid}) in tmux")
@@ -370,14 +357,12 @@ class ClaudeTerminalSession:
 
     async def resize_terminal(self, cols: int, rows: int):
         """Resize both the PTY and the underlying tmux session"""
-        # Resize the PTY
         try:
             winsize = struct.pack('HHHH', rows, cols, 0, 0)
             fcntl.ioctl(self.master_fd, termios.TIOCSWINSZ, winsize)
         except Exception as e:
             print(f"[{datetime.now().isoformat()}] Error resizing PTY: {e}")
 
-        # Also resize the tmux pane
         try:
             subprocess.run([
                 'tmux', 'resize-pane',
@@ -399,7 +384,6 @@ class ClaudeTerminalSession:
             except:
                 pass
 
-        # Kill the tmux session
         try:
             subprocess.run(['tmux', 'kill-session', '-t', self.tmux_session_name], timeout=2)
             print(f"[{datetime.now().isoformat()}] Killed tmux session: {self.tmux_session_name}")
@@ -408,7 +392,7 @@ class ClaudeTerminalSession:
 
 
 class WindowsClaudeTerminalSession:
-    """Windows implementation using subprocess instead of PTY/tmux"""
+    """Windows implementation using winpty for proper terminal emulation"""
 
     def __init__(self, session_id: str, project_dir: str = None, skip_permissions: bool = False, use_resume: bool = False, personal_preferences: str = None, connection_name: str = None):
         self.session_id = session_id
@@ -419,6 +403,7 @@ class WindowsClaudeTerminalSession:
         self.connection_name = connection_name or "Local CLI"
         self.process = None
         self.websockets = set()
+        self.using_winpty = False
         import queue
         import threading
         self.output_queue = queue.Queue()
@@ -429,7 +414,24 @@ class WindowsClaudeTerminalSession:
         import threading
 
         # Build Claude CLI arguments
-        claude_args = ['claude']
+        # On Windows, we need to find the full path to claude.cmd
+        claude_cmd = 'claude'
+        if IS_WINDOWS:
+            # Try common Claude CLI locations
+            possible_paths = [
+                r'C:\Users\nentr\AppData\Roaming\npm\claude.cmd',
+                os.path.expanduser(r'~\AppData\Roaming\npm\claude.cmd'),
+            ]
+            for path in possible_paths:
+                if os.path.exists(path):
+                    claude_cmd = path
+                    print(f"[{datetime.now().isoformat()}] Found Claude CLI at: {claude_cmd}")
+                    break
+            else:
+                # Fallback to just 'claude' and hope it's in PATH
+                print(f"[{datetime.now().isoformat()}] Claude CLI not found at common locations, trying PATH")
+
+        claude_args = [claude_cmd]
 
         if self.use_resume:
             claude_args.append('--resume')
@@ -441,44 +443,130 @@ class WindowsClaudeTerminalSession:
 
         # Set environment variables
         env = os.environ.copy()
+
         env['CLAUDE_CONNECTION_NAME'] = self.connection_name
         mcp_config_path = os.path.expanduser('~/.config/claude/mcp_config.json')
         if os.path.exists(mcp_config_path):
             env['MCP_CONFIG_FILE'] = mcp_config_path
 
-        # Start subprocess
+        # Try to start with winpty for proper terminal emulation
         try:
-            self.process = subprocess.Popen(
-                claude_args,
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                cwd=self.project_dir if self.project_dir and os.path.isdir(self.project_dir) else None,
-                env=env,
-                bufsize=0,
-                text=False
-            )
+            try:
+                from winpty import PtyProcess
+                # Build command string for winpty
+                # Use cmd.exe to properly invoke the .cmd file
+                cmd_parts = []
+                for arg in claude_args:
+                    if ' ' in arg:
+                        cmd_parts.append(f'"{arg}"')
+                    else:
+                        cmd_parts.append(arg)
+                cmd_str = ' '.join(cmd_parts)
 
-            # Start reader thread
-            def read_output():
-                while self.process and self.process.poll() is None:
-                    try:
-                        chunk = self.process.stdout.read(4096)
-                        if chunk:
-                            self.output_queue.put(chunk)
-                        else:
+                print(f"[{datetime.now().isoformat()}] Starting Claude with command: {cmd_str}")
+
+                # Use winpty for proper terminal emulation
+                # Determine working directory: project_dir > user home > None
+                work_dir = None
+                if self.project_dir and os.path.isdir(self.project_dir):
+                    work_dir = self.project_dir
+                elif IS_WINDOWS:
+                    # On Windows, default to user's home directory to avoid C:\ProgramData\claude-bridge
+                    user_home = os.path.expanduser('~')
+                    if os.path.isdir(user_home):
+                        work_dir = user_home
+
+                self.process = PtyProcess.spawn(
+                    cmd_str,
+                    dimensions=(24, 80),
+                    cwd=work_dir,
+                    env=env
+                )
+                self.using_winpty = True
+                print(f"[{datetime.now().isoformat()}] Started Claude CLI with winpty for session {self.session_id}")
+
+                # Start reader thread for winpty
+                def read_output():
+                    import time
+                    while True:
+                        try:
+                            if not self.process or not self.process.isalive():
+                                print(f"[{datetime.now().isoformat()}] Claude CLI process ended for session {self.session_id}")
+                                break
+
+                            chunk = self.process.read(4096)
+                            if chunk:
+                                self.output_queue.put(chunk.encode('utf-8') if isinstance(chunk, str) else chunk)
+                            else:
+                                time.sleep(0.01)
+                        except Exception as e:
+                            error_msg = str(e)
+                            if 'EOF' not in error_msg and 'closed' not in error_msg.lower():
+                                print(f"[{datetime.now().isoformat()}] Error reading output: {e}")
                             break
-                    except Exception as e:
-                        print(f"[{datetime.now().isoformat()}] Error reading output: {e}")
-                        break
 
-            self.reader_thread = threading.Thread(target=read_output, daemon=True)
-            self.reader_thread.start()
+                self.reader_thread = threading.Thread(target=read_output, daemon=True)
+                self.reader_thread.start()
 
-            print(f"[{datetime.now().isoformat()}] Started Claude CLI for session {self.session_id} (Windows, PID: {self.process.pid})")
+            except ImportError as ie:
+                print(f"[{datetime.now().isoformat()}] winpty not available ({ie}), falling back to subprocess")
+                # Fallback to subprocess
+                import subprocess
+                creation_flags = subprocess.CREATE_NO_WINDOW if IS_WINDOWS else 0
+
+                # Determine working directory: project_dir > user home > None
+                work_dir = None
+                if self.project_dir and os.path.isdir(self.project_dir):
+                    work_dir = self.project_dir
+                elif IS_WINDOWS:
+                    # On Windows, default to user's home directory to avoid C:\ProgramData\claude-bridge
+                    user_home = os.path.expanduser('~')
+                    if os.path.isdir(user_home):
+                        work_dir = user_home
+
+                self.process = subprocess.Popen(
+                    claude_args,
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    cwd=work_dir,
+                    env=env,
+                    bufsize=0,
+                    text=False,
+                    creationflags=creation_flags if IS_WINDOWS else 0
+                )
+                self.using_winpty = False
+                print(f"[{datetime.now().isoformat()}] Started Claude CLI with subprocess for session {self.session_id} (PID: {self.process.pid})")
+
+                # Start reader thread for subprocess
+                def read_output():
+                    import time
+                    while self.process and self.process.poll() is None:
+                        try:
+                            chunk = self.process.stdout.read(4096)
+                            if chunk:
+                                self.output_queue.put(chunk)
+                            else:
+                                time.sleep(0.01)
+                        except Exception as e:
+                            print(f"[{datetime.now().isoformat()}] Error reading output: {e}")
+                            break
+
+                    # Process ended, read remaining
+                    try:
+                        remaining = self.process.stdout.read()
+                        if remaining:
+                            self.output_queue.put(remaining)
+                    except:
+                        pass
+
+                self.reader_thread = threading.Thread(target=read_output, daemon=True)
+                self.reader_thread.start()
 
         except Exception as e:
             print(f"[{datetime.now().isoformat()}] Failed to start Claude CLI: {e}")
+            import traceback
+            traceback.print_exc()
             raise
 
     async def read_output(self):
@@ -492,15 +580,25 @@ class WindowsClaudeTerminalSession:
     async def write_input(self, text: str):
         """Write input to Claude CLI"""
         try:
-            if self.process and self.process.stdin:
-                self.process.stdin.write(text.encode('utf-8'))
-                self.process.stdin.flush()
+            if self.process:
+                if self.using_winpty:
+                    if self.process.isalive():
+                        self.process.write(text)
+                    else:
+                        print(f"[{datetime.now().isoformat()}] Cannot write, PTY not alive")
+                elif self.process.stdin:
+                    self.process.stdin.write(text.encode('utf-8'))
+                    self.process.stdin.flush()
         except Exception as e:
             print(f"Error writing to CLI: {e}")
 
     async def resize_terminal(self, cols: int, rows: int):
-        """Windows doesn't support PTY resize, so this is a no-op"""
-        pass
+        """Resize terminal if using winpty"""
+        try:
+            if self.using_winpty and self.process and self.process.isalive():
+                self.process.setwinsize(rows, cols)
+        except Exception as e:
+            pass
 
     def cleanup(self):
         """Clean up the process"""
@@ -521,6 +619,7 @@ class WindowsShellSession:
     def __init__(self, session_id: str = None):
         self.session_id = session_id or f"shell-{datetime.now().timestamp()}"
         self.process = None
+        self.pid = None
         self.websockets = set()
         import queue
         import threading
@@ -528,36 +627,92 @@ class WindowsShellSession:
         self.reader_thread = None
 
     async def start(self):
-        """Start cmd.exe using subprocess"""
+        """Start cmd.exe using winpty for proper terminal emulation"""
         import threading
 
         try:
-            self.process = subprocess.Popen(
-                ['cmd.exe'],
-                stdin=subprocess.PIPE,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                bufsize=0,
-                text=False
-            )
+            # Try to use winpty for proper PTY emulation on Windows
+            try:
+                from winpty import PtyProcess
 
-            # Start reader thread
-            def read_output():
-                while self.process and self.process.poll() is None:
-                    try:
-                        chunk = self.process.stdout.read(4096)
-                        if chunk:
-                            self.output_queue.put(chunk)
-                        else:
+                # Determine working directory - default to user home on Windows
+                work_dir = None
+                if IS_WINDOWS:
+                    user_home = os.path.expanduser('~')
+                    if os.path.isdir(user_home):
+                        work_dir = user_home
+
+                # Use winpty for interactive shell
+                self.process = PtyProcess.spawn('cmd.exe', dimensions=(24, 80), cwd=work_dir)
+                self.pid = self.process.pid if hasattr(self.process, 'pid') else None
+                self.using_winpty = True
+
+                print(f"[{datetime.now().isoformat()}] Started shell session {self.session_id} using winpty (PID: {self.pid})")
+
+                # Start reader thread for winpty
+                def read_output():
+                    while self.process and self.process.isalive():
+                        try:
+                            chunk = self.process.read(4096)
+                            if chunk:
+                                self.output_queue.put(chunk if isinstance(chunk, bytes) else chunk.encode('utf-8'))
+                            else:
+                                break
+                        except Exception as e:
+                            if self.process and self.process.isalive():
+                                print(f"[{datetime.now().isoformat()}] Error reading shell output: {e}")
                             break
-                    except Exception as e:
-                        print(f"[{datetime.now().isoformat()}] Error reading shell output: {e}")
-                        break
 
-            self.reader_thread = threading.Thread(target=read_output, daemon=True)
-            self.reader_thread.start()
+                self.reader_thread = threading.Thread(target=read_output, daemon=True)
+                self.reader_thread.start()
 
-            print(f"[{datetime.now().isoformat()}] Started shell session {self.session_id} (Windows, PID: {self.process.pid})")
+            except ImportError:
+                print(f"[{datetime.now().isoformat()}] winpty not available, falling back to subprocess (limited interactivity)")
+                self.using_winpty = False
+
+                # Fallback to subprocess (limited functionality)
+                import sys
+                if sys.platform == 'win32':
+                    creationflags = subprocess.CREATE_NO_WINDOW
+                else:
+                    creationflags = 0
+
+                # Determine working directory - default to user home on Windows
+                work_dir = None
+                if IS_WINDOWS:
+                    user_home = os.path.expanduser('~')
+                    if os.path.isdir(user_home):
+                        work_dir = user_home
+
+                self.process = subprocess.Popen(
+                    ['cmd.exe', '/Q'],
+                    stdin=subprocess.PIPE,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    cwd=work_dir,
+                    bufsize=0,
+                    text=False,
+                    creationflags=creationflags
+                )
+
+                self.pid = self.process.pid
+                print(f"[{datetime.now().isoformat()}] Started shell session {self.session_id} using subprocess (PID: {self.pid})")
+
+                # Start reader thread for subprocess
+                def read_output():
+                    while self.process and self.process.poll() is None:
+                        try:
+                            chunk = self.process.stdout.read(4096)
+                            if chunk:
+                                self.output_queue.put(chunk)
+                            else:
+                                break
+                        except Exception as e:
+                            print(f"[{datetime.now().isoformat()}] Error reading shell output: {e}")
+                            break
+
+                self.reader_thread = threading.Thread(target=read_output, daemon=True)
+                self.reader_thread.start()
 
         except Exception as e:
             print(f"[{datetime.now().isoformat()}] Failed to start shell: {e}")
@@ -574,15 +729,37 @@ class WindowsShellSession:
     async def write_input(self, text: str):
         """Write input to shell"""
         try:
-            if self.process and self.process.stdin:
-                self.process.stdin.write(text.encode('utf-8'))
-                self.process.stdin.flush()
+            print(f"[{datetime.now().isoformat()}] Writing to Windows shell: {repr(text)}")
+
+            if hasattr(self, 'using_winpty') and self.using_winpty:
+                # Using winpty - write directly to process
+                if self.process and self.process.isalive():
+                    self.process.write(text)
+                    print(f"[{datetime.now().isoformat()}] Successfully wrote to winpty")
+            else:
+                # Using subprocess - write to stdin
+                if self.process and self.process.stdin:
+                    self.process.stdin.write(text.encode('utf-8'))
+                    self.process.stdin.flush()
+                    print(f"[{datetime.now().isoformat()}] Successfully wrote to subprocess stdin")
         except Exception as e:
-            print(f"Error writing to shell: {e}")
+            print(f"[{datetime.now().isoformat()}] Error writing to shell: {e}")
+            import traceback
+            traceback.print_exc()
 
     async def resize_terminal(self, cols: int, rows: int):
-        """Windows doesn't support PTY resize, so this is a no-op"""
-        pass
+        """Resize terminal if using winpty"""
+        try:
+            if hasattr(self, 'using_winpty') and self.using_winpty:
+                if self.process and self.process.isalive():
+                    self.process.setwinsize(rows, cols)
+                    print(f"[{datetime.now().isoformat()}] Resized winpty terminal to {cols}x{rows}")
+        except Exception as e:
+            print(f"[{datetime.now().isoformat()}] Error resizing terminal: {e}")
+
+    def close(self):
+        """Close the shell session (alias for cleanup)"""
+        self.cleanup()
 
     def cleanup(self):
         """Clean up the process"""
@@ -605,6 +782,7 @@ class ShellSession:
         self.master_fd = None
         self.pid = None
         self.websockets = set()
+        self.current_cwd = None
         # Add timestamp to make session name unique each time
         timestamp = str(time.time()).replace('.', '')
         self.tmux_session_name = f"claude-bridge-{self.session_id}-{timestamp}"
@@ -640,9 +818,11 @@ class ShellSession:
                 ], timeout=2)
 
                 # Enable mouse support for scrolling with Shift+scroll
+                # Mouse off: let terminal (xterm.js) handle selection and clipboard
+                # This matches Recycle's config and allows browser clipboard to work
                 subprocess.run([
                     'tmux', 'set-option', '-t', self.tmux_session_name,
-                    'mouse', 'on'
+                    'mouse', 'off'
                 ], timeout=2)
             else:
                 print(f"[{datetime.now().isoformat()}] Attaching to existing tmux shell session: {self.tmux_session_name}")
@@ -659,7 +839,7 @@ class ShellSession:
 
         if self.pid == 0:
             # Child process - attach to tmux session
-            os.environ['TERM'] = 'xterm-256color'
+            os.environ['TERM'] = 'xterm-256color-ms'  # Use custom terminfo with Ms (clipboard) capability
             os.execvp('tmux', ['tmux', 'attach', '-t', self.tmux_session_name])
         else:
             # Parent process - make non-blocking
@@ -702,6 +882,37 @@ class ShellSession:
             print(f"[{datetime.now().isoformat()}] Resized tmux shell session {self.tmux_session_name} to {cols}x{rows}")
         except Exception as e:
             print(f"[{datetime.now().isoformat()}] Error resizing tmux pane: {e}")
+
+    def get_cwd(self):
+        """Get current working directory of the shell"""
+        if not self.pid:
+            return None
+        try:
+            # Get the shell's child process (the actual bash running commands)
+            result = subprocess.run(
+                ['pgrep', '-P', str(self.pid)],
+                capture_output=True,
+                text=True,
+                timeout=1
+            )
+            if result.returncode == 0:
+                child_pids = result.stdout.strip().split('\n')
+                if child_pids and child_pids[0]:
+                    # Use the first child process
+                    child_pid = child_pids[0]
+                    cwd_link = f'/proc/{child_pid}/cwd'
+                    if os.path.exists(cwd_link):
+                        cwd = os.readlink(cwd_link)
+                        return cwd
+
+            # Fallback to parent process
+            cwd_link = f'/proc/{self.pid}/cwd'
+            if os.path.exists(cwd_link):
+                cwd = os.readlink(cwd_link)
+                return cwd
+        except Exception as e:
+            pass
+        return None
 
     def close(self):
         """Close the PTY and tmux session"""
@@ -1211,7 +1422,8 @@ class ClaudeBridgeTerminalServer:
                         'custom_title': custom_titles.get(session_id),  # Add custom title if exists
                         'matched_projects': matched_projects,  # Add matched custom projects
                         'parent_session_id': None,  # Will be populated from database
-                        'is_favorite': 0  # Will be populated from database
+                        'is_favorite': 0,  # Will be populated from database
+                        'session_source': 'cli'  # Will be populated from database
                     }
 
                     sessions_in_project.append(session_info)
@@ -1263,15 +1475,17 @@ class ClaudeBridgeTerminalServer:
                     db_sessions = self.conv_db.get_sessions(limit=10000)
                     session_map = {s['session_id']: {
                         'parent_session_id': s.get('parent_session_id'),
-                        'is_favorite': s.get('is_favorite', 0)
+                        'is_favorite': s.get('is_favorite', 0),
+                        'session_source': s.get('session_source', 'cli')
                     } for s in db_sessions}
 
-                    # Update sessions with parent info and favorite status
+                    # Update sessions with parent info, favorite status, and source
                     for session in all_sessions:
                         sid = session['session_id']
                         if sid in session_map:
                             session['parent_session_id'] = session_map[sid]['parent_session_id']
                             session['is_favorite'] = session_map[sid]['is_favorite']
+                            session['session_source'] = session_map[sid]['session_source']
 
                     print(f"[{datetime.now().isoformat()}] Updated {len(all_sessions)} sessions with DB metadata")
             except Exception as e:
@@ -1446,6 +1660,10 @@ class ClaudeBridgeTerminalServer:
             asyncio.create_task(self.read_terminal_output(session_id))
             debug_log("Started read_terminal_output task")
 
+            # Start monitoring shell directory
+            asyncio.create_task(self.monitor_shell_directory(session_id))
+            debug_log("Started monitor_shell_directory task")
+
             # Track open tab
             self.open_tabs[session_id] = {
                 'sessionId': session_id,
@@ -1512,6 +1730,49 @@ class ClaudeBridgeTerminalServer:
             terminal.close()
             del self.sessions[session_id]
 
+    async def monitor_shell_directory(self, session_id: str):
+        """Monitor shell's current working directory and send updates"""
+        shell = self.sessions.get(session_id)
+        if not shell or not isinstance(shell, ShellSession):
+            print(f"[{datetime.now().isoformat()}] monitor_shell_directory: Not a shell session or session not found: {session_id}")
+            return
+
+        print(f"[{datetime.now().isoformat()}] Starting directory monitoring for shell session: {session_id}")
+        last_cwd = None
+        while session_id in self.sessions and shell.websockets:
+            try:
+                current_cwd = shell.get_cwd()
+                print(f"[{datetime.now().isoformat()}] Shell {session_id[:8]}: cwd={current_cwd}, last_cwd={last_cwd}")
+
+                if current_cwd and current_cwd != last_cwd:
+                    print(f"[{datetime.now().isoformat()}] Directory changed for {session_id[:8]}: {last_cwd} -> {current_cwd}")
+                    last_cwd = current_cwd
+                    shell.current_cwd = current_cwd
+
+                    # Send directory update to all connected clients
+                    message = {
+                        'type': 'shell_cwd_update',
+                        'session_id': session_id,
+                        'cwd': current_cwd,
+                        'timestamp': datetime.now().isoformat()
+                    }
+
+                    print(f"[{datetime.now().isoformat()}] Sending shell_cwd_update to {len(shell.websockets)} clients: {current_cwd}")
+                    for ws in list(shell.websockets):
+                        try:
+                            await self.send_message(ws, message)
+                        except Exception as e:
+                            print(f"[{datetime.now().isoformat()}] Error sending directory update: {e}")
+
+                await asyncio.sleep(1)  # Check every second
+            except Exception as e:
+                print(f"[{datetime.now().isoformat()}] Error monitoring shell directory: {e}")
+                import traceback
+                traceback.print_exc()
+                await asyncio.sleep(2)
+
+        print(f"[{datetime.now().isoformat()}] Stopped directory monitoring for shell session: {session_id}")
+
     async def handle_start_new_session(self, websocket, data: Dict):
         """Start a new Claude session with a title and optional initial prompt"""
         import uuid
@@ -1570,12 +1831,31 @@ class ClaudeBridgeTerminalServer:
                 'type': 'claude'
             }
 
+            # Save session to database with webui source
+            if self.conv_db:
+                try:
+                    self.conv_db.upsert_session(
+                        session_id=session_id,
+                        connection_name=connection_name,
+                        session_source='webui',
+                        custom_title=title,
+                        cwd=directory
+                    )
+                    print(f"[{datetime.now().isoformat()}] Saved web UI session {session_id[:8]} to database")
+                except Exception as e:
+                    print(f"[{datetime.now().isoformat()}] Warning: Could not save session to database: {e}")
+                    traceback.print_exc()
+
             await self.send_message(websocket, {
                 'type': 'terminal_started',
                 'session_id': session_id,
                 'title': title,
                 'timestamp': datetime.now().isoformat()
             })
+
+            # Invalidate session cache so new session appears immediately
+            self.session_cache_timestamp = 0
+            print(f"[{datetime.now().isoformat()}] Invalidated session cache for new session")
 
             # If initial prompt provided, send it after a short delay
             if initial_prompt:
@@ -1632,6 +1912,9 @@ class ClaudeBridgeTerminalServer:
         if session_id in self.open_tabs:
             del self.open_tabs[session_id]
             print(f"[{datetime.now().isoformat()}] Removed tab: {session_id}")
+
+        # Invalidate session cache so closed session is removed immediately
+        self.session_cache_timestamp = 0
 
     async def handle_upload_file(self, websocket, data: Dict):
         """Handle file upload from browser"""
@@ -2185,14 +2468,19 @@ class ClaudeBridgeTerminalServer:
                             ws_port = sys.argv[i + 1]
                             break
 
-                    # Build the installation command
-                    install_cmd = f'curl -fsSL {update_source}/install | SOURCE_SERVER={update_source} MACHINE_NAME="{machine_name}" WS_PORT={ws_port} bash'
+                    # Build the installation command based on platform
+                    if IS_WINDOWS:
+                        # Windows: Use PowerShell to download and execute install-bridge.ps1
+                        install_cmd = f'powershell -Command "Set-ExecutionPolicy Bypass -Scope Process -Force; $env:SOURCE_SERVER=\'{update_source}\'; $env:MACHINE_NAME=\'{machine_name}\'; $env:WS_PORT=\'{ws_port}\'; $env:SERVICE_USER=\'nentr\'; Invoke-WebRequest -Uri \'{update_source}/install-bridge.ps1\' -OutFile $env:TEMP\\install-bridge.ps1; & $env:TEMP\\install-bridge.ps1"'
+                    else:
+                        # Linux/macOS: Use curl and bash
+                        install_cmd = f'curl -fsSL {update_source}/install | SOURCE_SERVER={update_source} MACHINE_NAME="{machine_name}" WS_PORT={ws_port} bash'
 
                     print(f"[{datetime.now().isoformat()}] Running: {install_cmd}")
 
                     await self.send_message(websocket, {
                         'type': 'update_progress',
-                        'message': f'Installing updates...\nCommand: {install_cmd}',
+                        'message': f'Installing updates...\nPlatform: {"Windows" if IS_WINDOWS else "Linux/macOS"}',
                         'timestamp': datetime.now().isoformat()
                     })
 
@@ -2402,6 +2690,9 @@ class ClaudeBridgeTerminalServer:
             try:
                 async with aiofiles.open(titles_file, 'w') as f:
                     await f.write(json.dumps(titles, indent=2))
+
+                # Invalidate session cache so title update appears immediately
+                self.session_cache_timestamp = 0
 
                 await self.send_message(websocket, {
                     'type': 'session_title_updated',

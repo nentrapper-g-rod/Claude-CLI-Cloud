@@ -17,7 +17,13 @@ import threading
 import re
 
 # Add the path to conversation_db module
-sys.path.insert(0, '/opt/Claude-CLI-Cloud')
+# Auto-detect if we're in /opt/Claude-CLI-Cloud or ~/.claude-bridge
+import os
+from pathlib import Path
+if Path('/opt/Claude-CLI-Cloud/conversation_db.py').exists():
+    sys.path.insert(0, '/opt/Claude-CLI-Cloud')
+else:
+    sys.path.insert(0, str(Path.home() / '.claude-bridge'))
 
 # Central server for conversation aggregation
 CENTRAL_SERVER = os.environ.get('CLAUDE_CENTRAL_SERVER', 'http://100.94.187.56:8891')
@@ -60,14 +66,15 @@ def is_server_available():
     # Use cached result if available and recent
     if _server_available_cache['available'] is not None:
         if current_time - _server_available_cache['last_check'] < cache_duration:
+            # Return cached result immediately - no logging needed (reduces noise)
             return _server_available_cache['available']
 
     # Quick check if server is reachable
     try:
-        req = urllib.request.Request(f'{CENTRAL_SERVER}/api/connections/list', method='HEAD')
+        req = urllib.request.Request(f'{CENTRAL_SERVER}/api/connections', method='HEAD')
         with urllib.request.urlopen(req, timeout=0.5) as response:
             available = response.status == 200
-    except:
+    except Exception as e:
         available = False
 
     _server_available_cache['available'] = available
@@ -76,23 +83,56 @@ def is_server_available():
 
 def send_to_central_server_async(session_data):
     """Send session data to central server asynchronously (non-blocking)"""
+    async_log(f"send_to_central_server_async called with event: {session_data.get('event', 'unknown')}")
     def _send():
+        import time
+        start_time = time.time()
         try:
+            # Use synchronous logging for debugging since async threads might not complete
+            def sync_log(msg):
+                try:
+                    if Path('/opt/Claude-CLI-Cloud/conversation_db.py').exists():
+                        log_path = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
+                    else:
+                        log_path = Path.home() / '.claude-bridge' / 'hook-debug.log'
+                    with open(log_path, 'a') as f:
+                        f.write(f"[{datetime.now().isoformat()}] {msg}\n")
+                except:
+                    pass
+
+            sync_log("_send thread started")
             # Don't send if we ARE the central server or server is unavailable
-            if is_central_server() or not is_server_available():
+            sync_log(f"Checking is_central_server()...")
+            is_central = is_central_server()
+            sync_log(f"is_central_server() = {is_central}")
+            if is_central:
+                sync_log("Skipping send: This IS the central server")
                 return
 
+            sync_log(f"Checking is_server_available()...")
+            server_available = is_server_available()
+            sync_log(f"is_server_available() = {server_available}")
+            if not server_available:
+                sync_log("Skipping send: Central server unavailable")
+                return
+
+            sync_log(f"Preparing to send data to {CENTRAL_SERVER}/api/conversations/sync")
             data = json.dumps(session_data).encode('utf-8')
+            sync_log(f"Data prepared, size: {len(data)} bytes")
             req = urllib.request.Request(
                 f'{CENTRAL_SERVER}/api/conversations/sync',
                 data=data,
                 headers={'Content-Type': 'application/json'},
                 method='POST'
             )
+            sync_log(f"POST request created, opening connection...")
             with urllib.request.urlopen(req, timeout=2) as response:
-                pass  # Just fire and forget
-        except:
-            pass  # Silently fail - don't log to avoid I/O blocking
+                status = response.status
+                sync_log(f"Sent to central server: {status}")
+                return  # Success
+        except Exception as e:
+            elapsed = time.time() - start_time
+            sync_log(f"Failed to send to central server after {elapsed:.2f}s: {e}")
 
     # Run in background thread so it doesn't block
     thread = threading.Thread(target=_send, daemon=True)
@@ -131,7 +171,11 @@ def async_log(message):
     """Non-blocking debug logging"""
     def _log():
         try:
-            debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
+            # Auto-detect log path based on where conversation_db.py is installed
+            if Path('/opt/Claude-CLI-Cloud/conversation_db.py').exists():
+                debug_log = Path('/opt/Claude-CLI-Cloud') / 'hook-debug.log'
+            else:
+                debug_log = Path.home() / '.claude-bridge' / 'hook-debug.log'
             with open(debug_log, 'a') as f:
                 f.write(f"[{datetime.now().isoformat()}] {message}\n")
         except:
@@ -346,11 +390,11 @@ try:
                 # Log error but continue (async)
                 async_log(f"Error reading transcript: {e}")
 
-        # Update session timestamp
-        db.upsert_session(
-            session_id=session_id,
-            connection_name=connection_name
-        )
+    # Give background threads (send_to_central_server_async) time to complete
+    # Since they're daemon threads, they'll be killed when the script exits
+    # A short sleep ensures HTTP requests have time to finish
+    import time
+    time.sleep(0.5)
 
     sys.exit(0)
 

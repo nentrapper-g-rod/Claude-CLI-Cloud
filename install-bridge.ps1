@@ -5,6 +5,7 @@
 # Run as Administrator:
 #   Set-ExecutionPolicy Bypass -Scope Process -Force
 #   $env:SOURCE_SERVER="http://YOUR_SERVER:8890"
+#   $env:SERVICE_USER="nentr"  # Optional: Run service as specific user (default: SYSTEM)
 #   .\install-bridge.ps1
 #
 
@@ -79,21 +80,35 @@ try {
     exit 1
 }
 
-# Download optional MCP components
+# Download MCP components (required for conversation logging)
 Write-Host "Downloading MCP server components..." -ForegroundColor Green
 try {
-    Invoke-WebRequest -Uri "$SourceServer/download/conversation-mcp-server.py" -OutFile "$InstallDir\conversation-mcp-server.py" -ErrorAction SilentlyContinue
-    Invoke-WebRequest -Uri "$SourceServer/download/conversation_db.py" -OutFile "$InstallDir\conversation_db.py" -ErrorAction SilentlyContinue
-    Invoke-WebRequest -Uri "$SourceServer/download/conversation-hook.py" -OutFile "$InstallDir\conversation-hook.py" -ErrorAction SilentlyContinue
+    Invoke-WebRequest -Uri "$SourceServer/download/conversation-mcp-server.py" -OutFile "$InstallDir\conversation-mcp-server.py"
+    Write-Host "  Downloaded conversation-mcp-server.py" -ForegroundColor Green
 } catch {
-    Write-Host "Warning: Some MCP components could not be downloaded (optional)" -ForegroundColor Yellow
+    Write-Host "  Warning: Failed to download conversation-mcp-server.py" -ForegroundColor Yellow
+}
+
+try {
+    Invoke-WebRequest -Uri "$SourceServer/download/conversation_db.py" -OutFile "$InstallDir\conversation_db.py"
+    Write-Host "  Downloaded conversation_db.py" -ForegroundColor Green
+} catch {
+    Write-Host "  Error: Failed to download conversation_db.py (required for hooks)" -ForegroundColor Red
+}
+
+try {
+    Invoke-WebRequest -Uri "$SourceServer/download/conversation-hook.py" -OutFile "$InstallDir\conversation-hook.py"
+    Write-Host "  Downloaded conversation-hook.py" -ForegroundColor Green
+} catch {
+    Write-Host "  Error: Failed to download conversation-hook.py (required for hooks)" -ForegroundColor Red
 }
 
 # Check Python installation
 Write-Host "Checking Python installation..." -ForegroundColor Green
 try {
     $PythonVersion = & python --version 2>&1
-    Write-Host "Found: $PythonVersion" -ForegroundColor Green
+    $PythonPath = (Get-Command python).Source
+    Write-Host "Found: $PythonVersion at $PythonPath" -ForegroundColor Green
 } catch {
     Write-Host "Error: Python 3 is not installed" -ForegroundColor Red
     Write-Host "Please install Python 3.8 or higher from https://www.python.org/downloads/" -ForegroundColor Yellow
@@ -129,10 +144,12 @@ try {
 
 # Create startup script
 Write-Host "Creating startup script..." -ForegroundColor Green
+$DebugFlag = if ($WsPort -eq "8766") { "--debug" } else { "" }
+$ClaudeHomeFlag = if ($env:SERVICE_USER) { "--claude-home `"C:\Users\$env:SERVICE_USER\.claude`"" } else { "" }
 $StartupScript = @"
 @echo off
 cd /d "$InstallDir"
-python claude-bridge-server-terminal.py --machine-name "$MachineName" --port $WsPort $(if ($WsPort -eq "8766") { "--debug" } else { "" })
+"$PythonPath" claude-bridge-server-terminal.py --machine-name "$MachineName" --port $WsPort $ClaudeHomeFlag $DebugFlag
 "@
 
 $StartupScript | Out-File -FilePath "$InstallDir\start-bridge.bat" -Encoding ASCII
@@ -145,7 +162,10 @@ $NssmPath = Get-Command nssm -ErrorAction SilentlyContinue
 
 if ($NssmPath) {
     Write-Host "Using NSSM to create service..." -ForegroundColor Green
-    & nssm install "ClaudeBridge" "python" "$InstallDir\claude-bridge-server-terminal.py --machine-name $MachineName --port $WsPort $(if ($WsPort -eq "8766") { "--debug" } else { "" })"
+    $DebugArg = if ($WsPort -eq "8766") { "--debug" } else { "" }
+    $ClaudeHomeNssmArg = if ($env:SERVICE_USER) { "--claude-home `"C:\Users\$env:SERVICE_USER\.claude`"" } else { "" }
+    $NssmArgs = "$InstallDir\claude-bridge-server-terminal.py --machine-name `"$MachineName`" --port $WsPort $ClaudeHomeNssmArg $DebugArg"
+    & nssm install "ClaudeBridge" "$PythonPath" $NssmArgs
     & nssm set "ClaudeBridge" AppDirectory "$InstallDir"
     & nssm set "ClaudeBridge" DisplayName "Claude CLI Terminal Bridge Server"
     & nssm set "ClaudeBridge" Description "WebSocket bridge server for Claude CLI"
@@ -156,21 +176,60 @@ if ($NssmPath) {
     Write-Host "NSSM not found. Creating scheduled task instead..." -ForegroundColor Yellow
 
     # Create a scheduled task that runs at startup
-    $Action = New-ScheduledTaskAction -Execute "python" -Argument "$InstallDir\claude-bridge-server-terminal.py --machine-name $MachineName --port $WsPort $(if ($WsPort -eq "8766") { "--debug" } else { "" })" -WorkingDirectory $InstallDir
+    # Always use SYSTEM account for reliability
+    # If SERVICE_USER is specified, set environment variables to point to that user's .claude directory
+    $ServiceUser = "SYSTEM"
+
+    if ($env:SERVICE_USER) {
+        Write-Host "Service will run as SYSTEM with access to user: $env:SERVICE_USER" -ForegroundColor Cyan
+        $UserClaudeDir = "C:\Users\$env:SERVICE_USER\.claude"
+        $UserConfigDir = "C:\Users\$env:SERVICE_USER\.config\claude"
+        $ClaudeHomeArg = "--claude-home `"$UserClaudeDir`""
+    } else {
+        Write-Host "Service will run as: SYSTEM" -ForegroundColor Cyan
+        $UserClaudeDir = $null
+        $UserConfigDir = $null
+        $ClaudeHomeArg = ""
+    }
+
+    $DebugArg = if ($WsPort -eq "8766") { "--debug" } else { "" }
+    $TaskArgs = "$InstallDir\claude-bridge-server-terminal.py --machine-name `"$MachineName`" --port $WsPort $ClaudeHomeArg $DebugArg".Trim()
+
+    $Action = New-ScheduledTaskAction -Execute "`"$PythonPath`"" -Argument $TaskArgs -WorkingDirectory $InstallDir
     $Trigger = New-ScheduledTaskTrigger -AtStartup
-    $Principal = New-ScheduledTaskPrincipal -UserId "SYSTEM" -LogonType ServiceAccount -RunLevel Highest
+    $Principal = New-ScheduledTaskPrincipal -UserId $ServiceUser -LogonType ServiceAccount -RunLevel Highest
+
     $Settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 1)
+
+    # Stop any existing bridge processes before creating new task
+    Write-Host "Stopping existing bridge processes..." -ForegroundColor Yellow
+    Get-Process python -ErrorAction SilentlyContinue | Where-Object {$_.CommandLine -like "*claude-bridge*"} | Stop-Process -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 2
+
+    # Stop existing task if running
+    Stop-ScheduledTask -TaskName "ClaudeBridge" -ErrorAction SilentlyContinue
+    Start-Sleep -Seconds 1
 
     Register-ScheduledTask -TaskName "ClaudeBridge" -Action $Action -Trigger $Trigger -Principal $Principal -Settings $Settings -Force | Out-Null
     Start-ScheduledTask -TaskName "ClaudeBridge"
+    Start-Sleep -Seconds 2
     Write-Host "Scheduled task created and started successfully" -ForegroundColor Green
+
+    # Verify the task is running as the correct user
+    $TaskInfo = Get-ScheduledTask -TaskName "ClaudeBridge"
+    Write-Host "Task is configured to run as: $($TaskInfo.Principal.UserId)" -ForegroundColor Cyan
 }
 
 # Configure MCP if components were downloaded
 if (Test-Path "$InstallDir\conversation-mcp-server.py") {
     Write-Host "Configuring MCP server..." -ForegroundColor Green
 
-    $ClaudeConfigDir = "$env:USERPROFILE\.config\claude"
+    # Use the service user's profile for MCP config
+    if ($env:SERVICE_USER) {
+        $ClaudeConfigDir = "C:\Users\$env:SERVICE_USER\.config\claude"
+    } else {
+        $ClaudeConfigDir = "$env:USERPROFILE\.config\claude"
+    }
     New-Item -ItemType Directory -Force -Path $ClaudeConfigDir | Out-Null
 
     $McpConfig = @"
@@ -189,6 +248,59 @@ if (Test-Path "$InstallDir\conversation-mcp-server.py") {
 
     $McpConfig | Out-File -FilePath "$ClaudeConfigDir\mcp_config.json" -Encoding UTF8
     Write-Host "MCP configuration created at $ClaudeConfigDir\mcp_config.json" -ForegroundColor Green
+
+    # Configure conversation hooks
+    if (Test-Path "$InstallDir\conversation-hook.py") {
+        Write-Host "Configuring conversation hooks..." -ForegroundColor Green
+
+        # Determine the correct .claude directory based on service user
+        if ($env:SERVICE_USER) {
+            $ClaudeDir = "C:\Users\$env:SERVICE_USER\.claude"
+        } else {
+            $ClaudeDir = "$env:USERPROFILE\.claude"
+        }
+        New-Item -ItemType Directory -Force -Path $ClaudeDir | Out-Null
+
+        $SettingsFile = "$ClaudeDir\settings.json"
+
+        # Create or update settings.json with hooks
+        $HookConfig = @"
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $($InstallDir -replace '\\', '\\')\\conversation-hook.py"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python $($InstallDir -replace '\\', '\\')\\conversation-hook.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+"@
+
+        $HookConfig | Out-File -FilePath $SettingsFile -Encoding UTF8
+        Write-Host "Hooks configuration created at $SettingsFile" -ForegroundColor Green
+
+        # Set environment variables for hooks
+        Write-Host "Setting environment variables..." -ForegroundColor Green
+        [Environment]::SetEnvironmentVariable("CLAUDE_CENTRAL_SERVER", "http://100.94.187.56:8891", "Machine")
+        [Environment]::SetEnvironmentVariable("CLAUDE_CONNECTION_NAME", "$MachineName", "Machine")
+        Write-Host "CLAUDE_CENTRAL_SERVER=http://100.94.187.56:8891" -ForegroundColor Cyan
+        Write-Host "CLAUDE_CONNECTION_NAME=$MachineName" -ForegroundColor Cyan
+    }
 }
 
 Write-Host ""

@@ -188,6 +188,19 @@ class ConversationDB:
             if 'git_commits_mentioned' not in columns:
                 raise
 
+        # Migration: Add session_source column if it doesn't exist
+        try:
+            cursor.execute("PRAGMA table_info(sessions)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'session_source' not in columns:
+                cursor.execute('ALTER TABLE sessions ADD COLUMN session_source TEXT DEFAULT "cli"')
+                self.conn.commit()
+        except sqlite3.OperationalError as e:
+            cursor.execute("PRAGMA table_info(sessions)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if 'session_source' not in columns:
+                raise
+
         # Create indexes
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_connection ON sessions(connection_name)')
         cursor.execute('CREATE INDEX IF NOT EXISTS idx_sessions_modified ON sessions(last_modified)')
@@ -245,17 +258,23 @@ class ConversationDB:
         cursor.execute('SELECT id FROM sessions WHERE session_id = ?', (session_id,))
         exists = cursor.fetchone()
 
+        # Determine if we should update last_modified
+        # Only update timestamp if explicitly requested or if message_count changed
+        update_timestamp = kwargs.pop('update_timestamp', False)
+
         if exists:
             # Update existing session
             update_fields = []
             values = []
             for key, value in kwargs.items():
-                if key in ['parent_session_id', 'custom_title', 'project', 'cwd', 'message_count', 'is_favorite', 'project_tags', 'metadata', 'outcome_status', 'success_indicators', 'files_modified', 'git_commits_mentioned']:
+                if key in ['parent_session_id', 'custom_title', 'project', 'cwd', 'message_count', 'is_favorite', 'project_tags', 'metadata', 'outcome_status', 'success_indicators', 'files_modified', 'git_commits_mentioned', 'session_source']:
                     update_fields.append(f"{key} = ?")
                     values.append(json.dumps(value) if key in ['metadata', 'project_tags', 'success_indicators', 'files_modified', 'git_commits_mentioned'] else value)
 
             if update_fields:
-                update_fields.append("last_modified = CURRENT_TIMESTAMP")
+                # Only update last_modified if explicitly requested or if message_count changed
+                if update_timestamp or 'message_count' in kwargs:
+                    update_fields.append("last_modified = CURRENT_TIMESTAMP")
                 values.append(session_id)
                 cursor.execute(
                     f"UPDATE sessions SET {', '.join(update_fields)} WHERE session_id = ?",
@@ -264,8 +283,8 @@ class ConversationDB:
         else:
             # Insert new session
             cursor.execute('''
-                INSERT INTO sessions (session_id, connection_name, parent_session_id, custom_title, project, cwd, message_count, is_favorite, project_tags, metadata, outcome_status, success_indicators, files_modified, git_commits_mentioned)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                INSERT INTO sessions (session_id, connection_name, parent_session_id, custom_title, project, cwd, message_count, is_favorite, project_tags, metadata, outcome_status, success_indicators, files_modified, git_commits_mentioned, session_source)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ''', (
                 session_id,
                 connection_name,
@@ -280,7 +299,8 @@ class ConversationDB:
                 kwargs.get('outcome_status'),
                 json.dumps(kwargs.get('success_indicators', [])),
                 json.dumps(kwargs.get('files_modified', [])),
-                json.dumps(kwargs.get('git_commits_mentioned', []))
+                json.dumps(kwargs.get('git_commits_mentioned', [])),
+                kwargs.get('session_source', 'cli')
             ))
 
         self.conn.commit()
@@ -370,7 +390,7 @@ class ConversationDB:
         cursor = self.conn.cursor()
 
         sql = '''
-            SELECT m.*, s.connection_name, s.custom_title, s.project, s.cwd
+            SELECT m.*, s.connection_name, s.custom_title, s.project, s.cwd, s.session_source
             FROM messages m
             JOIN sessions s ON m.session_id = s.session_id
             WHERE m.id IN (SELECT rowid FROM messages_fts WHERE messages_fts MATCH ?)

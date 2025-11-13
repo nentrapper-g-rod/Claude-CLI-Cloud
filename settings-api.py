@@ -208,31 +208,28 @@ class SettingsAPI:
             if not self.db:
                 return web.json_response({'error': 'Database not available'}, status=500)
 
-            sessions = self.db.get_sessions(connection_name=None, limit=10000)
+            # Use get_sessions_grouped which includes latest_message from actual messages
+            grouped_data = self.db.get_sessions_grouped(limit=10000)
 
-            # Group by connection_name and project
+            # Transform to match expected API format with latest_message included
             grouped = {}
-            for session in sessions:
-                conn = session['connection_name']
-                project = session.get('project') or session.get('cwd') or 'Unknown'
-
-                if conn not in grouped:
-                    grouped[conn] = {}
-
-                if project not in grouped[conn]:
+            for conn, projects in grouped_data.items():
+                grouped[conn] = {}
+                for project, sessions in projects.items():
                     grouped[conn][project] = []
-
-                grouped[conn][project].append({
-                    'session_id': session['session_id'],
-                    'parent_session_id': session.get('parent_session_id'),
-                    'connection_name': conn,
-                    'project': project,
-                    'cwd': session.get('cwd'),
-                    'created_at': session.get('created_at'),
-                    'last_modified': session.get('last_modified'),
-                    'message_count': session.get('message_count', 0),
-                    'project_tags': session.get('project_tags')
-                })
+                    for session in sessions:
+                        grouped[conn][project].append({
+                            'session_id': session['session_id'],
+                            'parent_session_id': session.get('parent_session_id'),
+                            'connection_name': conn,
+                            'project': project,
+                            'cwd': session.get('cwd'),
+                            'created_at': session.get('created_at'),
+                            'last_modified': session.get('last_modified'),
+                            'latest_message': session.get('latest_message'),  # From actual message timestamps
+                            'message_count': session.get('message_count', 0),
+                            'project_tags': session.get('project_tags')
+                        })
 
             return web.json_response(grouped)
 

@@ -804,10 +804,6 @@
                         <option value="macos">macOS</option>
                     </select>
                 </div>
-                <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
-                    <input type="checkbox" id="connAutoConnect" checked style="width: auto; margin: 0;">
-                    <label for="connAutoConnect" style="margin: 0; cursor: pointer;">Auto-connect on page load/refresh</label>
-                </div>
                 <div class="modal-buttons">
                     <button type="submit" style="background: #4a9eff; color: white;">Save</button>
                     <button type="button" id="cancelBtn" style="background: #555; color: white;">Cancel</button>
@@ -964,7 +960,7 @@ export CLAUDE_CONNECTION_NAME=$(hostname)
                 <h3 style="color: #4a9eff; margin-top: 0;">🐧 Linux Quick Deploy</h3>
                 <p style="color: #b0b0b0; margin-bottom: 10px;">Run this single command on your new Linux server:</p>
                 <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px; position: relative;">
-                    <code id="deployCommand" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">curl -fsSL http://100.94.187.56:8888/install | SOURCE_SERVER=http://100.94.187.56:8888 MACHINE_NAME="your-server" WS_PORT=8766 bash</code>
+                    <code id="deployCommand" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">curl -fsSL http://100.94.187.56:8890/install | SOURCE_SERVER=http://100.94.187.56:8890 MACHINE_NAME="your-server" WS_PORT=8766 bash</code>
                     <button id="copyDeployBtn" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px; background: #3a3a3a; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">📋 Copy</button>
                 </div>
                 <p style="color: #888; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">
@@ -975,7 +971,7 @@ export CLAUDE_CONNECTION_NAME=$(hostname)
                 <h3 style="color: #4a9eff;">🪟 Windows Quick Deploy</h3>
                 <p style="color: #b0b0b0; margin-bottom: 10px;">Run this command in PowerShell (as Administrator) on your new Windows server:</p>
                 <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px; position: relative;">
-                    <code id="deployCommandWindows" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">irm http://100.94.187.56:8888/install-windows | iex</code>
+                    <code id="deployCommandWindows" style="color: #4aff4a; font-size: 13px; word-break: break-all; display: block;">irm http://100.94.187.56:8890/install-windows | iex</code>
                     <button id="copyDeployBtnWindows" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px; background: #3a3a3a; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">📋 Copy</button>
                 </div>
                 <p style="color: #888; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">
@@ -1059,7 +1055,7 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 </div>
 
                 <h3 style="color: #4a9eff;">Deployment Server</h3>
-                <p style="color: #b0b0b0;">Running on: <a href="http://100.94.187.56:8888" target="_blank" style="color: #4a9eff;">http://100.94.187.56:8888</a></p>
+                <p style="color: #b0b0b0;">Running on: <a href="http://100.94.187.56:8890" target="_blank" style="color: #4a9eff;">http://100.94.187.56:8890</a></p>
                 <p style="color: #888; font-size: 13px; margin-top: 10px;">
                     💡 The deployment server is only needed during installation and can be stopped afterward.
                 </p>
@@ -1909,14 +1905,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 document.getElementById('connHost').value = conn.host;
                 document.getElementById('connPort').value = conn.port;
                 document.getElementById('connPlatform').value = conn.platform || 'auto';
-                document.getElementById('connAutoConnect').checked = conn.autoConnect !== false; // Default to true if not set
                 deleteBtn.style.display = 'block';
             } else {
                 title.textContent = 'Add Connection';
                 form.reset();
                 document.getElementById('connPort').value = '8766';
                 document.getElementById('connPlatform').value = 'auto';
-                document.getElementById('connAutoConnect').checked = true; // Default to true for new connections
                 deleteBtn.style.display = 'none';
             }
 
@@ -1936,8 +1930,7 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 name: document.getElementById('connName').value,
                 host: document.getElementById('connHost').value,
                 port: parseInt(document.getElementById('connPort').value),
-                platform: document.getElementById('connPlatform').value,
-                autoConnect: document.getElementById('connAutoConnect').checked
+                platform: document.getElementById('connPlatform').value
             };
 
             if (state.editingConnectionIndex !== null) {
@@ -2610,7 +2603,7 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             console.log(`Current server version: ${connTab.version}`);
 
             // Check if already on latest version by fetching from deployment server
-            const defaultDeploymentServer = `http://${window.location.hostname}:8888`;
+            const defaultDeploymentServer = `http://${window.location.hostname}:8890`;
 
             // Prompt user for deployment server URL first
             const deploymentServer = prompt(
@@ -2618,8 +2611,8 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 `The remote server will download updates from this URL.\n` +
                 `Make sure this URL is accessible from ${conn.name}.\n\n` +
                 `Common options:\n` +
-                `- ${window.location.hostname}:8888 (current host)\n` +
-                `- 100.94.187.56:8888 (Tailscale)`,
+                `- ${window.location.hostname}:8890 (current host)\n` +
+                `- 100.94.187.56:8890 (Tailscale)`,
                 defaultDeploymentServer
             );
 
@@ -3400,18 +3393,10 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
             tab.innerHTML = `
                 <span class="tab-title"><span class="tab-title-text">${title}</span></span>
-                <span class="tab-reconnect" data-session="${sessionId}" data-conn="${connIndex}" style="display: none; margin-left: 5px; color: #4a9eff; cursor: pointer; font-size: 12px;" title="Reconnect">🔄</span>
                 <span class="tab-close" data-session="${sessionId}" data-conn="${connIndex}">×</span>
             `;
 
             tab.querySelector('.tab-title').addEventListener('click', () => switchTabForConnection(connIndex, sessionId));
-            tab.querySelector('.tab-reconnect').addEventListener('click', async (e) => {
-                e.stopPropagation();
-                const reconnectBtn = e.target;
-                reconnectBtn.style.display = 'none';
-                // Attempt to reconnect to the connection
-                await reconnectConnection(connIndex);
-            });
             tab.querySelector('.tab-close').addEventListener('click', (e) => {
                 e.stopPropagation();
                 closeTabForConnection(connIndex, sessionId);
@@ -3602,26 +3587,13 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     statusEl.className = 'connection-tab-status connected';
                 }
 
-                // Hide reconnect button on connection tab when connected
+                // Hide reconnect button when connected
                 const tabElement = document.querySelector(`.connection-tab[data-conn-index="${connIndex}"]`);
                 if (tabElement) {
                     const reconnectBtn = tabElement.querySelector('.connection-tab-reconnect');
                     if (reconnectBtn) {
                         reconnectBtn.style.display = 'none';
                     }
-                }
-
-                // Hide reconnect buttons on all session tabs for this connection
-                if (connTab.tabs) {
-                    Object.keys(connTab.tabs).forEach(sessionId => {
-                        const sessionTab = connTab.tabs[sessionId];
-                        if (sessionTab && sessionTab.tabElement) {
-                            const sessionReconnectBtn = sessionTab.tabElement.querySelector('.tab-reconnect');
-                            if (sessionReconnectBtn) {
-                                sessionReconnectBtn.style.display = 'none';
-                            }
-                        }
-                    });
                 }
 
                 // Update status indicator in sidebar header if this is the active connection
@@ -3680,26 +3652,13 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     statusEl.className = 'connection-tab-status disconnected';
                 }
 
-                // Show reconnect button on connection tab
+                // Show reconnect button
                 const tabElement = document.querySelector(`.connection-tab[data-conn-index="${connIndex}"]`);
                 if (tabElement) {
                     const reconnectBtn = tabElement.querySelector('.connection-tab-reconnect');
                     if (reconnectBtn) {
                         reconnectBtn.style.display = 'inline';
                     }
-                }
-
-                // Show reconnect buttons on all session tabs for this connection
-                if (connTab.tabs) {
-                    Object.keys(connTab.tabs).forEach(sessionId => {
-                        const sessionTab = connTab.tabs[sessionId];
-                        if (sessionTab && sessionTab.tabElement) {
-                            const sessionReconnectBtn = sessionTab.tabElement.querySelector('.tab-reconnect');
-                            if (sessionReconnectBtn) {
-                                sessionReconnectBtn.style.display = 'inline';
-                            }
-                        }
-                    });
                 }
 
                 // Show status if this is the active connection
@@ -7352,9 +7311,9 @@ Always add or update the version number on the dashboards or index or scripts wi
         }
 
         // Version constants
-        const WEB_APP_VERSION = '2.22.14';  // Windows v2.22.13 deployed successfully
+        const WEB_APP_VERSION = '2.22.09';  // Fixed deployment updates to use port 8888
         const BRIDGE_VERSION = '2.22.07';    // Linux: Mouse off for xterm.js clipboard handling
-        const BRIDGE_VERSION_WINDOWS = '2.22.14';  // Windows: Deployed v2.22.13 with port fix
+        const BRIDGE_VERSION_WINDOWS = '1.1.1';  // Windows: Initial stable release
 
         // Update metrics display
         function updateMetricsDisplay(metrics, serverName) {
@@ -10543,7 +10502,7 @@ Thumbs.db
 
             // Display separate versions for Linux and Windows bridges
             versionInfo.innerHTML = `Web v${WEB_APP_VERSION} | Bridge: 🐧 v${BRIDGE_VERSION} / 🪟 v${BRIDGE_VERSION_WINDOWS}`;
-            versionInfo.title = `Web Interface (port 8889): v${WEB_APP_VERSION}\nDeployment Server (port 8888): v${BRIDGE_VERSION} / v${BRIDGE_VERSION_WINDOWS}\nSupports: Linux, Windows, macOS`;
+            versionInfo.title = `Web Interface (port 8889): v${WEB_APP_VERSION}\nLinux Bridge (port 8890): v${BRIDGE_VERSION}\nWindows Bridge (port 8890): v${BRIDGE_VERSION_WINDOWS}\nSupports: Linux, Windows, macOS`;
         }
 
         // Initialize connection tab drag-and-drop
@@ -10793,21 +10752,14 @@ Thumbs.db
 
             // Auto-connect if enabled in preferences
             if (state.preferences.autoConnect) {
-                console.log('Auto-connect enabled, connecting to enabled connections...');
+                console.log('Auto-connect enabled, connecting to all connections...');
                 for (let i = 0; i < state.connections.length; i++) {
-                    // Check if this specific connection has auto-connect enabled (default to true if not set)
-                    const conn = state.connections[i];
-                    if (conn.autoConnect !== false) {
-                        try {
-                            console.log(`Auto-connecting to ${conn.name}...`);
-                            await openConnectionTab(i);
-                            // Small delay between connections
-                            await new Promise(resolve => setTimeout(resolve, 500));
-                        } catch (error) {
-                            console.error(`Failed to auto-connect to ${conn.name}:`, error);
-                        }
-                    } else {
-                        console.log(`Skipping ${conn.name} (auto-connect disabled for this connection)`);
+                    try {
+                        await openConnectionTab(i);
+                        // Small delay between connections
+                        await new Promise(resolve => setTimeout(resolve, 500));
+                    } catch (error) {
+                        console.error(`Failed to auto-connect to ${state.connections[i].name}:`, error);
                     }
                 }
             }
