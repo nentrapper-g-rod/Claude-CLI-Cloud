@@ -1609,7 +1609,7 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     <button class="connection-subtab" data-subtab="codex" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; border-right: 1px solid #3a3a3a; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
                         📖 Codex
                     </button>
-                    <button class="connection-subtab" data-subtab="filemaker" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; border-right: 1px solid #3a3a3a; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
+                    <button id="filemakerSubtabBtn" class="connection-subtab" data-subtab="filemaker" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; border-right: 1px solid #3a3a3a; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s; display: none;">
                         📁 FileMaker
                     </button>
                     <button class="connection-subtab" data-subtab="terminals" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
@@ -2681,6 +2681,17 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 if (connectionSubTabs) {
                     connectionSubTabs.style.display = 'block';
                 }
+
+                // Show/hide FileMaker tab based on connection settings
+                const filemakerBtn = document.getElementById('filemakerSubtabBtn');
+                if (filemakerBtn) {
+                    if (conn.hasFileMaker) {
+                        filemakerBtn.style.display = 'flex';
+                    } else {
+                        filemakerBtn.style.display = 'none';
+                    }
+                }
+
                 document.title = `${conn.name} - Claude CLI Terminal`;
 
                 // Update status indicator in sidebar header
