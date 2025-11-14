@@ -6,7 +6,7 @@
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
-    <title>Steel Server Bridge v2.22.11</title>
+    <title>Steel Server Bridge v2.26.0</title>
     <link rel="icon" href="icon.svg" type="image/svg+xml">
     <link rel="manifest" href="manifest.json">
     <link rel="apple-touch-icon" href="icon.svg">
@@ -792,7 +792,7 @@
                     <input type="text" id="connHost" required placeholder="e.g., example.com or 192.168.1.100">
                 </div>
                 <div class="form-group">
-                    <label for="connPort">WebSocket Port:</label>
+                    <label for="connPort">Claude Bridge Port:</label>
                     <input type="number" id="connPort" required placeholder="e.g., 8766" value="8766">
                 </div>
                 <div class="form-group">
@@ -807,6 +807,80 @@
                 <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
                     <input type="checkbox" id="connAutoConnect" checked style="width: auto; margin: 0;">
                     <label for="connAutoConnect" style="margin: 0; cursor: pointer;">Auto-connect on page load/refresh</label>
+                </div>
+
+                <!-- FileMaker Bridge Settings -->
+                <div style="margin-top: 20px; padding-top: 15px; border-top: 2px solid #444;">
+                    <h3 style="margin: 0 0 15px 0; color: #9e6a3a; font-size: 16px;">🗂️ FileMaker Bridge Settings</h3>
+
+                    <div class="form-group" style="display: flex; align-items: center; gap: 10px;">
+                        <input type="checkbox" id="connHasFileMaker" style="width: auto; margin: 0;">
+                        <label for="connHasFileMaker" style="margin: 0; cursor: pointer; font-weight: 600;">Enable FileMaker Bridge for this connection</label>
+                    </div>
+
+                    <div id="fileMakerSettings" style="display: none; margin-top: 15px; padding-left: 10px; border-left: 3px solid #9e6a3a;">
+                        <div class="form-group">
+                            <label for="connFileMakerPort">FileMaker Bridge Port:</label>
+                            <input type="number" id="connFileMakerPort" placeholder="e.g., 8767" value="8767">
+                        </div>
+
+                        <div class="form-group">
+                            <label for="connFmsHost">FileMaker Server Host:</label>
+                            <input type="text" id="connFmsHost" placeholder="e.g., 192.168.1.100 or fms.domain.com">
+                            <small style="color: #888; font-size: 11px; display: block; margin-top: 4px;">IP address or hostname of your FileMaker Server</small>
+                        </div>
+
+                        <!-- Admin Console Credentials -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #555;">
+                            <h4 style="margin: 0 0 10px 0; color: #9e6a3a; font-size: 14px;">Admin Console Credentials</h4>
+                            <small style="color: #888; font-size: 11px; display: block; margin-bottom: 10px;">Required to list hosted databases</small>
+
+                            <div class="form-group">
+                                <label for="connFmsAdminUsername">Admin Username:</label>
+                                <input type="text" id="connFmsAdminUsername" placeholder="Admin Console username">
+                            </div>
+
+                            <div class="form-group">
+                                <label for="connFmsAdminPassword">Admin Password:</label>
+                                <input type="password" id="connFmsAdminPassword" placeholder="Admin Console password">
+                            </div>
+
+                            <div class="form-group">
+                                <button type="button" id="findHostedFilesBtn" style="background: #9e6a3a; color: white; padding: 8px 16px; border: none; border-radius: 4px; cursor: pointer; font-size: 13px; display: flex; align-items: center; gap: 6px;">
+                                    <span>🔍</span>
+                                    <span>Find Hosted Files</span>
+                                </button>
+                            </div>
+
+                            <div id="hostedFilesList" style="display: none; margin-top: 10px; padding: 10px; background: #1a1a1a; border-radius: 4px; max-height: 200px; overflow-y: auto;">
+                                <label style="font-weight: 600; color: #9e6a3a; margin-bottom: 8px; display: block;">Select Database:</label>
+                                <div id="hostedFilesContainer"></div>
+                            </div>
+                        </div>
+
+                        <!-- Data API Credentials -->
+                        <div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #555;">
+                            <h4 style="margin: 0 0 10px 0; color: #9e6a3a; font-size: 14px;">Data API Credentials</h4>
+
+                            <div class="form-group">
+                                <label for="connFmsDatabase">Database:</label>
+                                <input type="text" id="connFmsDatabase" placeholder="e.g., MyDatabase.fmp12" readonly style="background: #2a2a2a; cursor: not-allowed;">
+                                <small style="color: #888; font-size: 11px; display: block; margin-top: 4px;">Selected from hosted files above</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="connFmsUsername">Data API Username:</label>
+                                <input type="text" id="connFmsUsername" placeholder="FileMaker account username">
+                                <small style="color: #888; font-size: 11px; display: block; margin-top: 4px;">Account with fmrest extended privilege</small>
+                            </div>
+
+                            <div class="form-group">
+                                <label for="connFmsPassword">Data API Password:</label>
+                                <input type="password" id="connFmsPassword" placeholder="FileMaker account password">
+                                <small style="color: #888; font-size: 11px; display: block; margin-top: 4px;">Will be sent to bridge server for API authentication</small>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 <div class="modal-buttons">
                     <button type="submit" style="background: #4a9eff; color: white;">Save</button>
@@ -982,6 +1056,18 @@ export CLAUDE_CONNECTION_NAME=$(hostname)
                     💡 The installer will prompt for machine name and port configuration.<br>
                     🔧 Requires Python 3.8+ and creates a Windows Service or Scheduled Task.<br>
                     📦 Automatically installs pywinpty for Windows terminal support.
+                </p>
+
+                <h3 style="color: #9e6a3a;">🗂️ FileMaker Bridge Quick Deploy</h3>
+                <p style="color: #b0b0b0; margin-bottom: 10px;">Run this single command on your Linux server to install FileMaker Bridge (port 8767):</p>
+                <div style="background: #000; padding: 15px; border-radius: 5px; margin-bottom: 20px; position: relative;">
+                    <code id="deployCommandFM" style="color: #ff9e4a; font-size: 13px; word-break: break-all; display: block;">curl -fsSL http://100.94.187.56:8888/filemaker-bridge-server.py -o ~/.filemaker-bridge/filemaker-bridge-server.py && mkdir -p ~/.filemaker-bridge && python3 ~/.filemaker-bridge/filemaker-bridge-server.py --machine-name "your-server" --port 8767</code>
+                    <button id="copyDeployBtnFM" style="position: absolute; top: 10px; right: 10px; padding: 5px 10px; background: #3a3a3a; color: white; border: none; border-radius: 3px; cursor: pointer; font-size: 12px;">📋 Copy</button>
+                </div>
+                <p style="color: #888; font-size: 13px; margin-top: -10px; margin-bottom: 20px;">
+                    💡 FileMaker Bridge v1.1.0 runs separately on port 8767.<br>
+                    📊 Provides FileMaker Server Data API integration alongside Claude CLI.<br>
+                    🔧 Stores sessions in same database but tagged with session_type='filemaker'.
                 </p>
 
                 <h3 style="color: #4a9eff;">What It Does</h3>
@@ -1299,6 +1385,35 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
         </div>
     </div>
 
+    <!-- New FileMaker Session Modal -->
+    <div id="newFileMakerSessionModal" class="modal">
+        <div class="modal-content">
+            <h2>New FileMaker Session</h2>
+            <form id="fileMakerSessionForm">
+                <div class="form-group">
+                    <label for="fmConnectionSelect">Connection:</label>
+                    <select id="fmConnectionSelect" required style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
+                        <option value="">Select a connection with FileMaker bridge...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="fmFileSelect">FileMaker File:</label>
+                    <select id="fmFileSelect" required style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px;">
+                        <option value="">Select a connection first...</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="fmInitialPrompt">Initial Prompt (optional):</label>
+                    <textarea id="fmInitialPrompt" rows="3" placeholder="What would you like to do with this FileMaker database?" style="width: 100%; padding: 8px; background: #2d2d2d; color: #e0e0e0; border: 1px solid #3a3a3a; border-radius: 5px; font-family: inherit;"></textarea>
+                </div>
+                <div class="modal-buttons">
+                    <button type="submit" style="background: #3a9e3a; color: white;">Create Session</button>
+                    <button type="button" onclick="hideFileMakerSessionModal()" style="background: #555; color: white;">Cancel</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- Git Push History Modal -->
     <div id="gitPushHistoryModal" class="modal">
         <div class="modal-content" style="max-width: 800px;">
@@ -1368,10 +1483,30 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
         </div>
     </div>
 
+    <!-- FMS API Logs Popover -->
+    <div id="fmsApiLogPopover" style="display: none; position: fixed; background: #2a2a2a; border: 1px solid #9e6a3a; border-radius: 8px; padding: 15px; box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 10000; min-width: 700px; max-width: 90vw; max-height: 500px; color: #e0e0e0;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; border-bottom: 1px solid #9e6a3a; padding-bottom: 8px;">
+            <h3 style="margin: 0; font-size: 16px; color: #9e6a3a;">📋 FileMaker API Logs</h3>
+            <button onclick="closeFmsApiLogPopover()" style="background: none; border: none; color: #999; cursor: pointer; font-size: 20px; padding: 0; width: 24px; height: 24px;">&times;</button>
+        </div>
+        <div style="margin-bottom: 10px; display: flex; gap: 8px;">
+            <button onclick="clearFmsApiLogs()" style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                🗑️ Clear Logs
+            </button>
+            <button onclick="refreshFmsApiLogs()" style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                🔄 Refresh
+            </button>
+        </div>
+        <div id="fmsApiLogContent" style="font-size: 12px; overflow-x: auto; overflow-y: auto; max-height: 380px; background: #1a1a1a; padding: 10px; border-radius: 5px; font-family: 'Courier New', monospace; line-height: 1.6;">
+            <div style="color: #888;">No logs yet...</div>
+        </div>
+    </div>
+
     <div class="header">
         <div class="header-title">
             🖥️ Claude CLI Terminal
             <span style="font-size: 0.7em; opacity: 0.7; margin-left: 10px;" id="versionInfo">Loading versions...</span>
+            <span style="font-size: 0.7em; opacity: 0.6; margin-left: 10px; color: #9e6a3a;" id="fmVersionInfo">FM Bridge: v1.1.0</span>
         </div>
         <div style="display: flex; align-items: center; gap: 15px;">
             <button id="settingsBtn" style="padding: 8px 16px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">
@@ -1474,6 +1609,9 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     <button class="connection-subtab" data-subtab="codex" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; border-right: 1px solid #3a3a3a; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
                         📖 Codex
                     </button>
+                    <button class="connection-subtab" data-subtab="filemaker" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; border-right: 1px solid #3a3a3a; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
+                        📁 FileMaker
+                    </button>
                     <button class="connection-subtab" data-subtab="terminals" style="flex: 1; padding: 10px; background: #252525; color: #b0b0b0; border: none; cursor: pointer; font-size: 12px; font-weight: 600; transition: all 0.2s;">
                         💻 Terminals
                     </button>
@@ -1498,6 +1636,81 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             <div id="sessionsContent" class="subtab-content" style="display: block;">
                 <div id="sessionsList" class="session-list">
                     <div class="loading">Ready to connect.</div>
+                </div>
+            </div>
+
+            <!-- FileMaker Content -->
+            <div id="filemakerContent" class="subtab-content" style="display: none;">
+                <!-- FMS API Status -->
+                <div id="fmsApiStatus" style="padding: 10px; border-bottom: 1px solid #3a3a3a; background: #252525;">
+                    <div style="display: flex; align-items: center; justify-content: space-between;">
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <span style="font-weight: 600; color: #9e6a3a;">FM API:</span>
+                            <span id="fmsApiStatusDot" style="display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: #9e3a3a;"></span>
+                            <span id="fmsApiStatusText" style="color: #b0b0b0; font-size: 13px;">Not Connected</span>
+                            <span id="fmsApiStatusSpinner" style="display: inline; font-size: 14px; cursor: pointer;" title="Click to reconnect">🔄</span>
+                        </div>
+                        <div style="display: flex; gap: 8px;">
+                            <button id="fmsApiLogBtn" style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: none; border-radius: 4px; cursor: pointer; font-size: 12px;">
+                                📋 Logs
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- FileMaker Sub-Tabs -->
+                <div style="display: flex; border-bottom: 1px solid #3a3a3a; background: #1e1e1e;">
+                    <button class="fm-subtab active" data-fm-subtab="sessions" style="flex: 1; padding: 10px; background: transparent; color: #e0e0e0; border: none; border-bottom: 2px solid #9e6a3a; cursor: pointer; font-size: 13px; font-weight: 600;">
+                        Sessions
+                    </button>
+                    <button class="fm-subtab" data-fm-subtab="scripts" style="flex: 1; padding: 10px; background: transparent; color: #888; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 13px;">
+                        FM Scripts
+                    </button>
+                    <button class="fm-subtab" data-fm-subtab="edit-scripts" style="flex: 1; padding: 10px; background: transparent; color: #888; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 13px;">
+                        Edit Scripts
+                    </button>
+                </div>
+
+                <!-- Sessions Sub-Tab -->
+                <div id="fmSessionsSubtab" class="fm-subtab-content" style="display: flex; flex-direction: column; height: calc(100% - 45px);">
+                    <!-- New FileMaker Session Button -->
+                    <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
+                        <button id="newFileMakerSessionBtn" style="width: 100%; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            ➕ New FileMaker Session
+                        </button>
+                    </div>
+                    <!-- FileMaker Sessions List -->
+                    <div id="filemakerSessionsList" class="session-list">
+                        <div class="loading">No FileMaker sessions yet. Create one to get started!</div>
+                    </div>
+                </div>
+
+                <!-- FM Scripts Sub-Tab -->
+                <div id="fmScriptsSubtab" class="fm-subtab-content" style="display: none; flex-direction: column; height: calc(100% - 45px);">
+                    <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
+                        <button id="refreshFmScriptsBtn" style="width: 100%; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            🔄 Refresh Scripts
+                        </button>
+                    </div>
+                    <div id="fmScriptsList" style="flex: 1; overflow-y: auto; padding: 10px;">
+                        <div style="color: #888; text-align: center; padding: 20px;">
+                            Connect to FileMaker to view scripts
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Edit Scripts Sub-Tab -->
+                <div id="fmEditScriptsSubtab" class="fm-subtab-content" style="display: none; flex-direction: column; height: calc(100% - 45px);">
+                    <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
+                        <button id="newFmScriptBtn" style="width: 100%; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            ➕ New Script
+                        </button>
+                    </div>
+                    <div id="fmEditScriptsList" style="flex: 1; overflow-y: auto; padding: 10px;">
+                        <div style="color: #888; text-align: center; padding: 20px;">
+                            Create or edit FileMaker scripts
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -1622,7 +1835,8 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
     <script>
         // Version
-        const UI_VERSION = "2.22.11";
+        const UI_VERSION = "2.35.0";
+        const FM_BRIDGE_VERSION = "1.2.0";
 
         // Session Cache Manager - handles optimistic updates and server sync
         const SessionCacheManager = {
@@ -1740,6 +1954,16 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
             // Session color mapping for active sessions
             sessionColors: {},            // Map: sessionId -> color
+
+            // WebSocket debug tracking
+            wsDebug: window.location.search.includes('debug=ws'),
+            debugStats: {
+                messageQueue: [],
+                pendingMessages: 0,
+                totalBytesSent: 0,
+                totalBytesReceived: 0,
+                latencyHistory: []
+            },
 
             // Server-side preferences
             preferences: {
@@ -1909,14 +2133,33 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 document.getElementById('connHost').value = conn.host;
                 document.getElementById('connPort').value = conn.port;
                 document.getElementById('connPlatform').value = conn.platform || 'auto';
-                document.getElementById('connAutoConnect').checked = conn.autoConnect !== false; // Default to true if not set
+                document.getElementById('connAutoConnect').checked = conn.autoConnect !== false;
+
+                // FileMaker Bridge settings
+                const hasFileMaker = conn.fileMakerPort || conn.fmsHost;
+                document.getElementById('connHasFileMaker').checked = hasFileMaker;
+                document.getElementById('fileMakerSettings').style.display = hasFileMaker ? 'block' : 'none';
+                document.getElementById('connFileMakerPort').value = conn.fileMakerPort || '8767';
+                document.getElementById('connFmsHost').value = conn.fmsHost || '';
+                document.getElementById('connFmsAdminUsername').value = conn.fmsAdminUsername || '';
+                document.getElementById('connFmsAdminPassword').value = conn.fmsAdminPassword || '';
+                document.getElementById('connFmsDatabase').value = conn.fmsDatabase || '';
+                document.getElementById('connFmsUsername').value = conn.fmsUsername || '';
+                document.getElementById('connFmsPassword').value = conn.fmsPassword || '';
+
                 deleteBtn.style.display = 'block';
             } else {
                 title.textContent = 'Add Connection';
                 form.reset();
                 document.getElementById('connPort').value = '8766';
                 document.getElementById('connPlatform').value = 'auto';
-                document.getElementById('connAutoConnect').checked = true; // Default to true for new connections
+                document.getElementById('connAutoConnect').checked = true;
+
+                // FileMaker Bridge defaults
+                document.getElementById('connHasFileMaker').checked = false;
+                document.getElementById('fileMakerSettings').style.display = 'none';
+                document.getElementById('connFileMakerPort').value = '8767';
+
                 deleteBtn.style.display = 'none';
             }
 
@@ -1932,6 +2175,8 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
         async function saveConnection(event) {
             event.preventDefault();
 
+            const hasFileMaker = document.getElementById('connHasFileMaker').checked;
+
             const conn = {
                 name: document.getElementById('connName').value,
                 host: document.getElementById('connHost').value,
@@ -1939,6 +2184,27 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 platform: document.getElementById('connPlatform').value,
                 autoConnect: document.getElementById('connAutoConnect').checked
             };
+
+            // Add FileMaker settings if enabled
+            if (hasFileMaker) {
+                const fmPort = document.getElementById('connFileMakerPort').value;
+                conn.fileMakerPort = fmPort ? parseInt(fmPort) : null;
+                conn.fmsHost = document.getElementById('connFmsHost').value || null;
+                conn.fmsAdminUsername = document.getElementById('connFmsAdminUsername').value || null;
+                conn.fmsAdminPassword = document.getElementById('connFmsAdminPassword').value || null;
+                conn.fmsDatabase = document.getElementById('connFmsDatabase').value || null;
+                conn.fmsUsername = document.getElementById('connFmsUsername').value || null;
+                conn.fmsPassword = document.getElementById('connFmsPassword').value || null;
+            } else {
+                // Clear FileMaker settings if disabled
+                conn.fileMakerPort = null;
+                conn.fmsHost = null;
+                conn.fmsAdminUsername = null;
+                conn.fmsAdminPassword = null;
+                conn.fmsDatabase = null;
+                conn.fmsUsername = null;
+                conn.fmsPassword = null;
+            }
 
             if (state.editingConnectionIndex !== null) {
                 state.connections[state.editingConnectionIndex] = conn;
@@ -2195,6 +2461,58 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             version.style.opacity = '0.7';
             version.textContent = '';  // Will be populated when version is received
 
+            const fmVersion = document.createElement('span');
+            fmVersion.className = 'connection-tab-fm-version';
+            fmVersion.style.marginLeft = '5px';
+            fmVersion.style.fontSize = '0.75em';
+            fmVersion.style.opacity = '0.6';
+            fmVersion.style.color = '#9e6a3a';
+            fmVersion.textContent = '';  // Will show "FM: v1.0" if FileMaker bridge detected
+
+            // FM status indicator (only shown if FileMaker port is configured)
+            const fmStatus = document.createElement('span');
+            fmStatus.className = 'connection-tab-fm-status';
+            fmStatus.style.marginLeft = '5px';
+            fmStatus.style.display = 'none';  // Hidden by default
+            fmStatus.title = 'FileMaker Bridge';
+
+            // Create container for icon and dots
+            const fmIcon = document.createElement('span');
+            fmIcon.style.fontSize = '0.9em';
+            fmIcon.textContent = '🗂️';  // FileMaker icon
+
+            // First dot - FileMaker Bridge connection status
+            const fmBridgeDot = document.createElement('span');
+            fmBridgeDot.className = 'connection-tab-fm-bridge-dot';
+            fmBridgeDot.style.display = 'inline-block';
+            fmBridgeDot.style.width = '6px';
+            fmBridgeDot.style.height = '6px';
+            fmBridgeDot.style.borderRadius = '50%';
+            fmBridgeDot.style.marginLeft = '2px';
+            fmBridgeDot.style.verticalAlign = 'middle';
+
+            // Second dot - FMS API connection status
+            const fmApiDot = document.createElement('span');
+            fmApiDot.className = 'connection-tab-fm-api-dot';
+            fmApiDot.style.display = 'inline-block';
+            fmApiDot.style.width = '6px';
+            fmApiDot.style.height = '6px';
+            fmApiDot.style.borderRadius = '50%';
+            fmApiDot.style.marginLeft = '2px';
+            fmApiDot.style.verticalAlign = 'middle';
+
+            fmStatus.appendChild(fmIcon);
+            fmStatus.appendChild(fmBridgeDot);
+            fmStatus.appendChild(fmApiDot);
+
+            // Set initial color based on if FM port is configured
+            if (conn.fileMakerPort) {
+                fmStatus.style.display = 'inline';
+                fmBridgeDot.style.backgroundColor = '#9e3a3a';  // Red when not connected
+                fmApiDot.style.backgroundColor = '#9e3a3a';  // Red when not connected
+                fmStatus.title = 'FileMaker Bridge - Not Connected | API - Not Connected';
+            }
+
             // Reconnect button (hidden by default, shown when disconnected)
             const reconnectBtn = document.createElement('span');
             reconnectBtn.className = 'connection-tab-reconnect';
@@ -2220,6 +2538,8 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             tab.appendChild(status);
             tab.appendChild(name);
             tab.appendChild(version);
+            tab.appendChild(fmVersion);
+            tab.appendChild(fmStatus);
             tab.appendChild(reconnectBtn);
             tab.appendChild(closeBtn);
 
@@ -2251,7 +2571,9 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 activeTab: null,
                 connected: false,
                 tabElement: null,
-                version: null
+                version: null,
+                fmVersion: null,
+                hasFileMaker: false
             };
 
             // Load cached sessions immediately for this connection
@@ -2273,6 +2595,16 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
         }
 
         function switchToConnectionTab(connIndex) {
+            // Hide all top-level link tabs (GitHub repos, etc.)
+            if (state.topLevelTabs) {
+                Object.keys(state.topLevelTabs).forEach(id => {
+                    const tab = state.topLevelTabs[id];
+                    if (tab.wrapper) tab.wrapper.style.display = 'none';
+                    const tabBtn = document.getElementById(`tab-${id}`);
+                    if (tabBtn) tabBtn.classList.remove('active');
+                });
+            }
+
             // Hide all connection tabs' content
             Object.entries(state.connectionTabs).forEach(([idx, connTab]) => {
                 if (connTab.tabElement) {
@@ -2297,6 +2629,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
             activeConn.tabElement.classList.add('active');
             state.activeConnectionTab = connIndex;
+
+            // Show session tabs container (may have been hidden by top-level tabs)
+            const tabsContainer = document.getElementById('tabsContainer');
+            if (tabsContainer) {
+                tabsContainer.style.display = 'flex';
+            }
 
             // Show ALL session tabs for this connection (but not active yet)
             Object.values(activeConn.tabs).forEach(tab => {
@@ -3352,6 +3690,10 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             let inputTimer = null;
 
             terminal.onData(data => {
+                if (state.wsDebug) {
+                    console.log(`[WS-DEBUG] ⌨ Terminal input received:`, data.length, 'chars');
+                }
+
                 if (connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
                     // Buffer input characters
                     inputBuffer += data;
@@ -3364,24 +3706,35 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
                     if (shouldFlushImmediately) {
                         // Send immediately for Enter or control characters
-                        connTab.websocket.send(JSON.stringify({
+                        if (state.wsDebug) {
+                            console.log(`[WS-DEBUG] → Flushing input immediately (${inputBuffer.length} chars)`);
+                        }
+                        sendWebSocketMessageWithDebug(connTab.websocket, {
                             type: 'terminal_input',
                             session_id: sessionId,
                             input: inputBuffer
-                        }));
+                        }, state.connections[connIndex]?.name || 'Connection');
                         inputBuffer = '';
                     } else {
                         // Buffer regular characters and send after brief delay
                         inputTimer = setTimeout(() => {
                             if (inputBuffer) {
-                                connTab.websocket.send(JSON.stringify({
+                                if (state.wsDebug) {
+                                    console.log(`[WS-DEBUG] → Flushing buffered input (${inputBuffer.length} chars)`);
+                                }
+                                sendWebSocketMessageWithDebug(connTab.websocket, {
                                     type: 'terminal_input',
                                     session_id: sessionId,
                                     input: inputBuffer
-                                }));
+                                }, state.connections[connIndex]?.name || 'Connection');
                                 inputBuffer = '';
                             }
                         }, 10); // 10ms buffer time
+                    }
+                } else {
+                    if (state.wsDebug) {
+                        console.warn(`[WS-DEBUG] ✗ Cannot send input - websocket not ready`);
+                        console.warn(`[WS-DEBUG]   ReadyState: ${connTab.websocket ? connTab.websocket.readyState : 'null'}`);
                     }
                 }
             });
@@ -3559,6 +3912,48 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             });
         }
 
+        // Helper function to send WebSocket message with debug logging
+        function sendWebSocketMessageWithDebug(ws, data, connectionName = '') {
+            if (!ws || ws.readyState !== WebSocket.OPEN) {
+                if (state.wsDebug) {
+                    console.error(`[WS-DEBUG] ✗ Cannot send to ${connectionName} - not connected`);
+                    console.error(`[WS-DEBUG]   ReadyState: ${ws ? ws.readyState : 'null'}`);
+                }
+                return;
+            }
+
+            const sendTime = performance.now();
+            const messageId = `msg_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+            const messageStr = JSON.stringify(data);
+            const messageSize = messageStr.length;
+
+            // Track message in queue
+            state.debugStats.messageQueue.push({
+                id: messageId,
+                type: data.type,
+                sentAt: sendTime,
+                size: messageSize
+            });
+            state.debugStats.pendingMessages++;
+            state.debugStats.totalBytesSent += messageSize;
+
+            if (state.wsDebug) {
+                console.log(`[WS-DEBUG] → Sending message ${messageId} to ${connectionName}`);
+                console.log(`[WS-DEBUG]   Type: ${data.type}`);
+                console.log(`[WS-DEBUG]   Size: ${messageSize} bytes`);
+                console.log(`[WS-DEBUG]   Queue depth: ${state.debugStats.pendingMessages}`);
+                console.log(`[WS-DEBUG]   Total sent: ${(state.debugStats.totalBytesSent / 1024).toFixed(2)} KB`);
+                console.log(`[WS-DEBUG]   Buffered: ${ws.bufferedAmount} bytes`);
+            }
+
+            ws.send(messageStr);
+
+            // Monitor buffered amount
+            if (state.wsDebug && ws.bufferedAmount > 0) {
+                console.warn(`[WS-DEBUG] ⚠ Buffer not empty: ${ws.bufferedAmount} bytes`);
+            }
+        }
+
         // Connect to WebSocket
         function connectWebSocketForConnection(connIndex) {
             const conn = state.connections[connIndex];
@@ -3578,6 +3973,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
             console.log(`Connecting to ${conn.name} (${wsUrl})`);
 
+            const connectStartTime = performance.now();
+            if (state.wsDebug) {
+                console.log(`[WS-DEBUG] Connection attempt started at ${new Date().toISOString()}`);
+                console.log(`[WS-DEBUG] Target: ${conn.name} (${wsUrl})`);
+            }
+
             // Update status indicator
             const statusEl = connTab.tabElement.querySelector('.connection-tab-status');
             if (statusEl) {
@@ -3587,7 +3988,17 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             const ws = new WebSocket(wsUrl);
 
             ws.onopen = async () => {
+                const connectEndTime = performance.now();
+                const connectionLatency = (connectEndTime - connectStartTime).toFixed(2);
                 console.log(`WebSocket connected to ${conn.name}`);
+
+                if (state.wsDebug) {
+                    console.log(`[WS-DEBUG] ✓ Connected to ${conn.name} in ${connectionLatency}ms`);
+                    console.log(`[WS-DEBUG] ReadyState: ${ws.readyState} (OPEN)`);
+                    console.log(`[WS-DEBUG] Protocol: ${ws.protocol || 'none'}`);
+                    console.log(`[WS-DEBUG] Extensions: ${ws.extensions || 'none'}`);
+                }
+
                 connTab.connected = true;
                 connTab.websocket = ws;
 
@@ -3642,6 +4053,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
                 // Personal preferences removed - no longer sent to server
 
+                // Connect to FileMaker Bridge if port is configured
+                if (conn.fileMakerPort) {
+                    console.log(`Connecting to FileMaker Bridge on ${conn.host}:${conn.fileMakerPort}`);
+                    connectFileMakerBridge(connIndex);
+                }
+
                 // Start metrics refresh if this is the active connection
                 if (state.activeConnectionTab === connIndex) {
                     startMetricsRefresh();
@@ -3649,19 +4066,83 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             };
 
             ws.onmessage = (event) => {
+                const receiveTime = performance.now();
+                const messageSize = event.data.length;
+                state.debugStats.totalBytesReceived += messageSize;
+
+                if (state.wsDebug) {
+                    console.log(`[WS-DEBUG] ← Message received from ${conn.name} at ${new Date().toISOString()}`);
+                    console.log(`[WS-DEBUG]   Size: ${messageSize} bytes`);
+                    console.log(`[WS-DEBUG]   Total received: ${(state.debugStats.totalBytesReceived / 1024).toFixed(2)} KB`);
+                }
+
                 try {
-                    const data = JSON.parse(event.data);
-                    handleMessageForConnection(connIndex, data);
+                    const parsedData = JSON.parse(event.data);
+
+                    if (state.wsDebug) {
+                        console.log(`[WS-DEBUG]   Type: ${parsedData.type}`);
+                        console.log(`[WS-DEBUG]   Parse time: ${(performance.now() - receiveTime).toFixed(2)}ms`);
+
+                        // Track latency for matching request/response pairs
+                        if (state.debugStats.messageQueue.length > 0) {
+                            const matchingMsg = state.debugStats.messageQueue.find(m =>
+                                (m.type === 'discover_sessions' && parsedData.type === 'sessions') ||
+                                (m.type === 'load_session' && parsedData.type === 'session_loaded') ||
+                                (m.type === 'chat' && parsedData.type === 'response') ||
+                                (m.type === 'terminal_input' && parsedData.type === 'terminal_output') ||
+                                (m.type === 'get_metrics' && parsedData.type === 'metrics')
+                            );
+
+                            if (matchingMsg) {
+                                const latency = receiveTime - matchingMsg.sentAt;
+                                state.debugStats.latencyHistory.push(latency);
+                                if (state.debugStats.latencyHistory.length > 100) state.debugStats.latencyHistory.shift();
+                                state.debugStats.pendingMessages--;
+                                state.debugStats.messageQueue = state.debugStats.messageQueue.filter(m => m.id !== matchingMsg.id);
+
+                                const avgLatency = state.debugStats.latencyHistory.reduce((a,b)=>a+b,0) / state.debugStats.latencyHistory.length;
+                                console.log(`[WS-DEBUG] ⏱ Round-trip latency: ${latency.toFixed(2)}ms (avg: ${avgLatency.toFixed(2)}ms)`);
+                                console.log(`[WS-DEBUG]   Queue depth: ${state.debugStats.pendingMessages}`);
+                            }
+                        }
+                    }
+
+                    handleMessageForConnection(connIndex, parsedData);
                 } catch (e) {
                     console.error(`Failed to parse message from ${conn.name}:`, event.data);
                     console.error('Parse error:', e);
+                    if (state.wsDebug) {
+                        console.error(`[WS-DEBUG] ✗ Parse error:`, e);
+                    }
                 }
             };
 
             ws.onerror = (error) => {
                 console.error(`WebSocket error for ${conn.name}:`, error);
+
+                if (state.wsDebug) {
+                    console.error(`[WS-DEBUG] ✗ Error for ${conn.name} at ${new Date().toISOString()}:`, error);
+                    console.error(`[WS-DEBUG]   ReadyState: ${ws.readyState}`);
+                    console.error(`[WS-DEBUG]   URL: ${wsUrl}`);
+                }
+
                 if (statusEl) {
                     statusEl.className = 'connection-tab-status disconnected';
+                }
+
+                // Update FM Bridge status indicator on error (only bridge dot, not API)
+                const tabElement = connTab.tabElement;
+                if (tabElement) {
+                    const fmStatusEl = tabElement.querySelector('.connection-tab-fm-status');
+                    if (fmStatusEl && fmStatusEl.style.display !== 'none') {
+                        const fmBridgeDotEl = fmStatusEl.querySelector('.connection-tab-fm-bridge-dot');
+                        if (fmBridgeDotEl) {
+                            fmBridgeDotEl.style.backgroundColor = '#9e3a3a';  // Red dot
+                        }
+                        const fmApiDotEl = fmStatusEl.querySelector('.connection-tab-fm-api-dot');
+                        const apiStatus = fmApiDotEl && fmApiDotEl.style.backgroundColor === 'rgb(58, 158, 58)' ? 'Connected' : 'Not Connected';
+                        fmStatusEl.title = `FileMaker Bridge - Connection Error | API - ${apiStatus}`;
+                    }
                 }
 
                 // Update sidebar header status if this is the active connection
@@ -3673,8 +4154,16 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 }
             };
 
-            ws.onclose = () => {
+            ws.onclose = (event) => {
                 console.log(`WebSocket closed for ${conn.name}`);
+
+                if (state.wsDebug) {
+                    console.log(`[WS-DEBUG] Connection closed for ${conn.name} at ${new Date().toISOString()}`);
+                    console.log(`[WS-DEBUG]   Code: ${event.code}`);
+                    console.log(`[WS-DEBUG]   Reason: ${event.reason || 'none'}`);
+                    console.log(`[WS-DEBUG]   Clean: ${event.wasClean}`);
+                }
+
                 connTab.connected = false;
                 if (statusEl) {
                     statusEl.className = 'connection-tab-status disconnected';
@@ -3686,6 +4175,18 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     const reconnectBtn = tabElement.querySelector('.connection-tab-reconnect');
                     if (reconnectBtn) {
                         reconnectBtn.style.display = 'inline';
+                    }
+
+                    // Update FM Bridge status indicator to red (disconnected) - only bridge dot, not API
+                    const fmStatusEl = tabElement.querySelector('.connection-tab-fm-status');
+                    if (fmStatusEl && fmStatusEl.style.display !== 'none') {
+                        const fmBridgeDotEl = fmStatusEl.querySelector('.connection-tab-fm-bridge-dot');
+                        if (fmBridgeDotEl) {
+                            fmBridgeDotEl.style.backgroundColor = '#9e3a3a';  // Red dot
+                        }
+                        const fmApiDotEl = fmStatusEl.querySelector('.connection-tab-fm-api-dot');
+                        const apiStatus = fmApiDotEl && fmApiDotEl.style.backgroundColor === 'rgb(58, 158, 58)' ? 'Connected' : 'Not Connected';
+                        fmStatusEl.title = `FileMaker Bridge - Disconnected | API - ${apiStatus}`;
                     }
                 }
 
@@ -3710,6 +4211,111 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     const sidebarStatusEl = document.getElementById('sidebarHeaderStatus');
                     if (sidebarStatusEl) {
                         sidebarStatusEl.className = 'connection-tab-status disconnected';
+                    }
+                }
+            };
+        }
+
+        // Connect to FileMaker Bridge WebSocket
+        function connectFileMakerBridge(connIndex) {
+            const conn = state.connections[connIndex];
+            if (!conn || !conn.fileMakerPort) {
+                return;
+            }
+
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab) {
+                return;
+            }
+
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const fmWsUrl = `${protocol}//${conn.host}:${conn.fileMakerPort}`;
+
+            console.log(`Connecting to FileMaker Bridge at ${fmWsUrl}`);
+
+            const fmWs = new WebSocket(fmWsUrl);
+
+            fmWs.onopen = () => {
+                console.log(`FileMaker Bridge connected for ${conn.name}`);
+                connTab.fmWebsocket = fmWs;
+                connTab.fmConnected = true;
+
+                // Send FMS credentials if configured
+                if (conn.fmsHost && conn.fmsDatabase && conn.fmsUsername && conn.fmsPassword) {
+                    const configMessage = {
+                        type: 'configure_fms',
+                        fms_host: conn.fmsHost,
+                        fms_database: conn.fmsDatabase,
+                        fms_username: conn.fmsUsername,
+                        fms_password: conn.fmsPassword
+                    };
+                    fmWs.send(JSON.stringify(configMessage));
+                    console.log(`Sent FMS configuration to FileMaker Bridge: ${conn.fmsHost} / ${conn.fmsDatabase}`);
+                }
+            };
+
+            fmWs.onmessage = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+                    console.log(`FileMaker Bridge message from ${conn.name}:`, data);
+
+                    // Handle handshake
+                    if (data.type === 'handshake') {
+                        handleMessageForConnection(connIndex, data);
+                    }
+                    // Handle FMS API status updates
+                    else if (data.type === 'fms_api_status') {
+                        updateFmsApiStatus(data.connected, data.message);
+                        // Also update the connection tab API dot
+                        updateConnectionTabApiDot(connIndex, data.connected);
+                    }
+                    // Handle FMS API errors
+                    else if (data.type === 'fms_api_error') {
+                        updateFmsApiStatus(false, `Error: ${data.error}`);
+                        // Also update the connection tab API dot
+                        updateConnectionTabApiDot(connIndex, false);
+                    }
+                    // Handle other FileMaker Bridge messages here
+                } catch (e) {
+                    console.error(`Failed to parse FileMaker Bridge message from ${conn.name}:`, event.data);
+                }
+            };
+
+            fmWs.onerror = (error) => {
+                console.error(`FileMaker Bridge WebSocket error for ${conn.name}:`, error);
+
+                // Update FM Bridge status indicator to red (error) - only the bridge dot
+                const tabElement = connTab.tabElement;
+                if (tabElement) {
+                    const fmStatusEl = tabElement.querySelector('.connection-tab-fm-status');
+                    if (fmStatusEl) {
+                        const fmBridgeDotEl = fmStatusEl.querySelector('.connection-tab-fm-bridge-dot');
+                        if (fmBridgeDotEl) {
+                            fmBridgeDotEl.style.backgroundColor = '#9e3a3a';  // Red dot
+                        }
+                        const fmApiDotEl = fmStatusEl.querySelector('.connection-tab-fm-api-dot');
+                        const apiStatus = fmApiDotEl && fmApiDotEl.style.backgroundColor === 'rgb(58, 158, 58)' ? 'Connected' : 'Not Connected';
+                        fmStatusEl.title = `FileMaker Bridge - Connection Error | API - ${apiStatus}`;
+                    }
+                }
+            };
+
+            fmWs.onclose = (event) => {
+                console.log(`FileMaker Bridge WebSocket closed for ${conn.name}`);
+                connTab.fmConnected = false;
+
+                // Update FM Bridge status indicator to red (disconnected) - only the bridge dot
+                const tabElement = connTab.tabElement;
+                if (tabElement) {
+                    const fmStatusEl = tabElement.querySelector('.connection-tab-fm-status');
+                    if (fmStatusEl) {
+                        const fmBridgeDotEl = fmStatusEl.querySelector('.connection-tab-fm-bridge-dot');
+                        if (fmBridgeDotEl) {
+                            fmBridgeDotEl.style.backgroundColor = '#9e3a3a';  // Red dot
+                        }
+                        const fmApiDotEl = fmStatusEl.querySelector('.connection-tab-fm-api-dot');
+                        const apiStatus = fmApiDotEl && fmApiDotEl.style.backgroundColor === 'rgb(58, 158, 58)' ? 'Connected' : 'Not Connected';
+                        fmStatusEl.title = `FileMaker Bridge - Disconnected | API - ${apiStatus}`;
                     }
                 }
             };
@@ -3815,6 +4421,37 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                             if (versionEl) {
                                 const platformIcon = data.platform === 'windows' ? '🪟' : data.platform === 'linux' ? '🐧' : data.platform === 'macos' ? '🍎' : '';
                                 versionEl.textContent = `v${data.version} ${platformIcon}`;
+                            }
+                        }
+                    }
+                    break;
+
+                case 'handshake':
+                    // Handle handshake from FileMaker bridge or other services
+                    console.log(`Received handshake from ${state.connections[connIndex].name}:`, data);
+                    if (data.has_filemaker) {
+                        connTab.hasFileMaker = true;
+                        connTab.fmVersion = data.version;
+                        console.log(`FileMaker bridge detected: v${data.version}`);
+
+                        // Update FM version display in connection tab
+                        if (connTab.tabElement) {
+                            const fmVersionEl = connTab.tabElement.querySelector('.connection-tab-fm-version');
+                            if (fmVersionEl) {
+                                fmVersionEl.textContent = `FM: v${data.version}`;
+                            }
+
+                            // Update FM Bridge status indicator to green (connected)
+                            const fmStatusEl = connTab.tabElement.querySelector('.connection-tab-fm-status');
+                            if (fmStatusEl) {
+                                const fmBridgeDotEl = fmStatusEl.querySelector('.connection-tab-fm-bridge-dot');
+                                if (fmBridgeDotEl) {
+                                    fmBridgeDotEl.style.backgroundColor = '#3a9e3a';  // Green dot
+                                }
+                                // Update title to show both statuses
+                                const fmApiDotEl = fmStatusEl.querySelector('.connection-tab-fm-api-dot');
+                                const apiStatus = fmApiDotEl && fmApiDotEl.style.backgroundColor === 'rgb(58, 158, 58)' ? 'Connected' : 'Not Connected';
+                                fmStatusEl.title = `FileMaker Bridge v${data.version} - Connected | API - ${apiStatus}`;
                             }
                         }
                     }
@@ -3932,6 +4569,11 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     break;
 
                 case 'shell_cwd_update':
+                    // Skip updates for temporary sessions (md-finder, editor, etc.)
+                    if (data.session_id && (data.session_id.startsWith('md-finder-') || data.session_id.startsWith('editor-'))) {
+                        break;
+                    }
+
                     console.log('Received shell_cwd_update:', data);
                     if (data.session_id && connTab.tabs[data.session_id]) {
                         const tab = connTab.tabs[data.session_id];
@@ -6922,6 +7564,13 @@ Always add or update the version number on the dashboards or index or scripts wi
                 copyBtnWindows.addEventListener('click', copyDeployCommandWindows);
                 copyBtnWindows.setAttribute('data-listener-attached', 'true');
             }
+
+            // Attach copy button handler for FileMaker Bridge
+            const copyBtnFM = document.getElementById('copyDeployBtnFM');
+            if (copyBtnFM && !copyBtnFM.hasAttribute('data-listener-attached')) {
+                copyBtnFM.addEventListener('click', copyDeployCommandFM);
+                copyBtnFM.setAttribute('data-listener-attached', 'true');
+            }
         }
 
         // Hide deploy modal
@@ -7032,6 +7681,48 @@ Always add or update the version number on the dashboards or index or scripts wi
                     console.log('Copied successfully via Clipboard API');
                     btn.textContent = '✓ Copied!';
                     btn.style.background = '#3a9e3a';
+                    setTimeout(() => {
+                        btn.textContent = originalText;
+                        btn.style.background = '#3a3a3a';
+                    }, 2000);
+                }).catch(err => {
+                    console.error('Clipboard API failed:', err);
+                    fallbackCopy(command, btn, originalText);
+                });
+            } else {
+                console.log('Clipboard API not available, using fallback');
+                fallbackCopy(command, btn, originalText);
+            }
+        }
+
+        // Copy FileMaker Bridge deploy command to clipboard
+        function copyDeployCommandFM(event) {
+            console.log('FileMaker Bridge copy button clicked');
+
+            const commandEl = document.getElementById('deployCommandFM');
+            if (!commandEl) {
+                console.error('FileMaker Bridge deploy command element not found');
+                alert('Error: Command element not found');
+                return;
+            }
+
+            const command = commandEl.textContent.trim();
+            console.log('FileMaker Bridge command to copy:', command);
+
+            const btn = event.target.closest('button');
+            if (!btn) {
+                console.error('Button not found');
+                return;
+            }
+
+            const originalText = btn.textContent;
+
+            // Try clipboard API first
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(command).then(() => {
+                    console.log('Copied successfully via Clipboard API');
+                    btn.textContent = '✓ Copied!';
+                    btn.style.background = '#9e6a3a';
                     setTimeout(() => {
                         btn.textContent = originalText;
                         btn.style.background = '#3a3a3a';
@@ -7418,7 +8109,7 @@ Always add or update the version number on the dashboards or index or scripts wi
             }
         }
 
-        // Connection Sub-tab switching (OpenCode/Codex/Sessions/Terminals)
+        // Connection Sub-tab switching (OpenCode/Codex/Sessions/FileMaker/Terminals)
         function switchConnectionSubTab(subtabName) {
             // Remove active class from all subtabs
             document.querySelectorAll('.connection-subtab').forEach(tab => {
@@ -7443,6 +8134,8 @@ Always add or update the version number on the dashboards or index or scripts wi
                 document.getElementById('codexContent').style.display = 'block';
             } else if (subtabName === 'sessions') {
                 document.getElementById('sessionsContent').style.display = 'block';
+            } else if (subtabName === 'filemaker') {
+                document.getElementById('filemakerContent').style.display = 'block';
             } else if (subtabName === 'terminals') {
                 document.getElementById('terminalsContent').style.display = 'block';
             }
@@ -8179,6 +8872,16 @@ Always add or update the version number on the dashboards or index or scripts wi
                             onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'"
                             title="Open code editor">
                         📝 Editor
+                    </button>
+                `;
+
+                // View .md Files button
+                headerHTML += `
+                    <button onclick="viewProjectMarkdownFiles(${JSON.stringify(project).replace(/"/g, '&quot;')}); event.stopPropagation();"
+                            style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 5px; cursor: pointer; font-size: 12px; font-weight: 600;"
+                            onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'"
+                            title="View all markdown files in project">
+                        📄 .md Files
                     </button>
                 `;
 
@@ -9008,6 +9711,260 @@ Thumbs.db
                 console.error('Failed to delete project:', error);
                 showStatus('Failed to delete project', 'error');
             }
+        }
+
+        // View all markdown files in project
+        async function viewProjectMarkdownFiles(project) {
+            // Determine which connection to use
+            let targetConnectionIndex = project.connection_index;
+
+            // If no connection specified, show error
+            if (targetConnectionIndex === null || targetConnectionIndex === undefined) {
+                showStatus('No connection specified for this project', 'error');
+                return;
+            }
+
+            // Check if connection exists
+            if (!state.connections[targetConnectionIndex]) {
+                showStatus('Connection not found', 'error');
+                return;
+            }
+
+            let connTab = state.connectionTabs[targetConnectionIndex];
+
+            // Connect if not connected
+            if (!connTab || !connTab.websocket || connTab.websocket.readyState !== WebSocket.OPEN) {
+                showStatus(`Connecting to ${state.connections[targetConnectionIndex].name}...`, 'info');
+                await connectToServer(targetConnectionIndex);
+                await new Promise(resolve => setTimeout(resolve, 1000));
+                connTab = state.connectionTabs[targetConnectionIndex];
+
+                if (!connTab || !connTab.websocket || connTab.websocket.readyState !== WebSocket.OPEN) {
+                    showStatus('Failed to connect to server', 'error');
+                    return;
+                }
+            }
+
+            // Get project directories
+            const projectDirs = project.directories || (project.working_directory ? [project.working_directory] : []);
+            if (projectDirs.length === 0) {
+                showStatus('No directories configured for this project', 'error');
+                return;
+            }
+
+            // Create a temporary shell session to find markdown files
+            const tempSessionId = `md-finder-${Date.now()}`;
+            let outputBuffer = '';
+            let sessionStarted = false;
+
+            showStatus('Searching for markdown files...', 'info');
+
+            // Build find command to search for .md files in all project directories
+            const findCommands = projectDirs.map(dir => `find "${dir}" -type f -name "*.md" 2>/dev/null`).join(' ; ');
+            const command = `${findCommands} | sort ; echo "<<MD_SEARCH_DONE>>"`;
+
+            console.log('MD Search - Project directories:', projectDirs);
+            console.log('MD Search - Command to execute:', command);
+
+            // Listen for terminal output
+            const handleResponse = (event) => {
+                try {
+                    const data = JSON.parse(event.data);
+
+                    if (data.session_id === tempSessionId) {
+                        if (data.type === 'terminal_started') {
+                            sessionStarted = true;
+                            // Send the find command
+                            connTab.websocket.send(JSON.stringify({
+                                type: 'terminal_input',
+                                session_id: tempSessionId,
+                                input: command + '\n'
+                            }));
+                        } else if (data.type === 'terminal_output' && sessionStarted) {
+                            outputBuffer += data.output;
+                            console.log('MD Search - Output buffer:', outputBuffer);
+
+                            // Check if we've received all output
+                            if (outputBuffer.includes('<<MD_SEARCH_DONE>>')) {
+                                connTab.websocket.removeEventListener('message', handleResponse);
+
+                                // Close the temporary shell session
+                                connTab.websocket.send(JSON.stringify({
+                                    type: 'close_session',
+                                    session_id: tempSessionId
+                                }));
+
+                                // Parse the output
+                                const cleanOutput = outputBuffer.split('<<MD_SEARCH_DONE>>')[0];
+                                console.log('MD Search - Clean output:', cleanOutput);
+
+                                const files = cleanOutput.split('\n')
+                                    .map(line => line.trim())
+                                    .filter(line => line.length > 0 && line.endsWith('.md') && !line.includes('$'))
+                                    .filter((v, i, a) => a.indexOf(v) === i); // Remove duplicates
+
+                                console.log('MD Search - Parsed files:', files);
+
+                                if (files.length === 0) {
+                                    console.log('MD Search - No files found. Raw output buffer:', outputBuffer);
+                                    showStatus('No markdown files found in project directories', 'warning');
+                                    return;
+                                }
+
+                                // Show markdown files in a modal
+                                showMarkdownFilesModal(project, files, targetConnectionIndex);
+                                showStatus(`Found ${files.length} markdown file${files.length !== 1 ? 's' : ''}`, 'success');
+                            }
+                        }
+                    }
+                } catch (err) {
+                    console.error('Error handling markdown files response:', err);
+                }
+            };
+
+            connTab.websocket.addEventListener('message', handleResponse);
+
+            // Start a temporary shell session
+            connTab.websocket.send(JSON.stringify({
+                type: 'start_shell',
+                session_id: tempSessionId,
+                skip_permissions: true
+            }));
+
+            // Timeout after 15 seconds
+            setTimeout(() => {
+                if (!outputBuffer.includes('<<MD_SEARCH_DONE>>')) {
+                    connTab.websocket.removeEventListener('message', handleResponse);
+                    connTab.websocket.send(JSON.stringify({
+                        type: 'close_session',
+                        session_id: tempSessionId
+                    }));
+                    showStatus('Search timed out', 'error');
+                }
+            }, 15000);
+        }
+
+        // Show modal with list of markdown files
+        function showMarkdownFilesModal(project, files, connectionIndex) {
+            // Create modal
+            const modal = document.createElement('div');
+            modal.style.cssText = 'position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); display: flex; align-items: center; justify-content: center; z-index: 10000;';
+
+            const modalContent = document.createElement('div');
+            modalContent.style.cssText = 'background: #1e1e1e; padding: 20px; border-radius: 8px; max-width: 800px; width: 90%; max-height: 80vh; overflow-y: auto; box-shadow: 0 4px 20px rgba(0,0,0,0.5);';
+
+            modalContent.innerHTML = `
+                <h2 style="margin: 0 0 15px 0; color: #e0e0e0; font-size: 18px;">
+                    📄 Markdown Files - ${project.name}
+                </h2>
+                <div style="color: #888; font-size: 12px; margin-bottom: 15px;">
+                    Found ${files.length} markdown file${files.length !== 1 ? 's' : ''}
+                </div>
+                <div id="mdFilesList" style="display: flex; flex-direction: column; gap: 8px;">
+                    ${files.map(file => `
+                        <div style="padding: 10px; background: #2d2d2d; border-radius: 5px; display: flex; align-items: center; gap: 10px; border-left: 3px solid #4a9eff;">
+                            <span style="flex: 1; font-family: monospace; font-size: 12px; color: #e0e0e0; word-break: break-all;">${file}</span>
+                            <button onclick="openFileInEditor('${file.replace(/'/g, "\\'")}', ${connectionIndex}); event.stopPropagation();"
+                                    style="padding: 6px 12px; background: #4a9eff; color: white; border: none; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;"
+                                    onmouseover="this.style.background='#3a8eef'" onmouseout="this.style.background='#4a9eff'">
+                                📝 Open
+                            </button>
+                            <button onclick="copyToClipboard('${file.replace(/'/g, "\\'")}'); event.stopPropagation();"
+                                    style="padding: 6px 12px; background: #3a3a3a; color: #e0e0e0; border: 1px solid #4a4a4a; border-radius: 4px; cursor: pointer; font-size: 11px; white-space: nowrap;"
+                                    onmouseover="this.style.background='#4a4a4a'" onmouseout="this.style.background='#3a3a3a'">
+                                📋 Copy Path
+                            </button>
+                        </div>
+                    `).join('')}
+                </div>
+                <div style="margin-top: 20px; text-align: right;">
+                    <button onclick="this.closest('[style*=fixed]').remove();"
+                            style="padding: 8px 16px; background: #555; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 13px;">
+                        Close
+                    </button>
+                </div>
+            `;
+
+            modal.appendChild(modalContent);
+            document.body.appendChild(modal);
+
+            // Close on background click
+            modal.addEventListener('click', (e) => {
+                if (e.target === modal) {
+                    modal.remove();
+                }
+            });
+        }
+
+        // Helper function to copy text to clipboard
+        function copyToClipboard(text) {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(() => {
+                    showStatus('Path copied to clipboard', 'success');
+                }).catch(err => {
+                    console.error('Failed to copy:', err);
+                    showStatus('Failed to copy to clipboard', 'error');
+                });
+            } else {
+                // Fallback for non-secure contexts
+                const textarea = document.createElement('textarea');
+                textarea.value = text;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showStatus('Path copied to clipboard', 'success');
+                } catch (err) {
+                    showStatus('Failed to copy to clipboard', 'error');
+                }
+                document.body.removeChild(textarea);
+            }
+        }
+
+        // Open file in code editor
+        async function openFileInEditor(filePath, connectionIndex) {
+            // Check if connection exists
+            if (!state.connections[connectionIndex]) {
+                showStatus('Connection not found', 'error');
+                return;
+            }
+
+            const connTab = state.connectionTabs[connectionIndex];
+            if (!connTab || !connTab.websocket || connTab.websocket.readyState !== WebSocket.OPEN) {
+                showStatus('Connection is not active', 'error');
+                return;
+            }
+
+            // Create a session ID for the editor
+            const sessionId = `editor-${Date.now()}`;
+
+            // Start a Claude session with the file opened
+            showStatus(`Opening ${filePath}...`, 'info');
+
+            // Get directory from file path
+            const directory = filePath.substring(0, filePath.lastIndexOf('/'));
+
+            // Send start_terminal command with the file directory
+            connTab.websocket.send(JSON.stringify({
+                type: 'start_terminal',
+                session_id: sessionId,
+                project_dir: directory,
+                skip_permissions: true
+            }));
+
+            // Wait a moment for the session to start, then close the modal
+            setTimeout(() => {
+                // Close the markdown files modal
+                const modal = document.querySelector('[style*="position: fixed"][style*="rgba(0,0,0,0.8)"]');
+                if (modal) {
+                    modal.remove();
+                }
+
+                // Switch to the connections tab to show the new session
+                document.querySelector('[data-tab="connections"]').click();
+            }, 500);
         }
 
         // Open file explorer for project
@@ -10524,16 +11481,140 @@ Thumbs.db
             document.getElementById('diskPopover').style.display = 'none';
         }
 
-        // Close popover when clicking outside
-        document.addEventListener('click', function(event) {
-            const popover = document.getElementById('diskPopover');
-            const container = document.getElementById('diskMetricContainer');
+        // FMS API Log Popover Functions
+        let fmsApiLogs = []; // Store FMS API logs
 
-            if (popover && container &&
-                popover.style.display === 'block' &&
-                !popover.contains(event.target) &&
-                !container.contains(event.target)) {
+        function showFmsApiLogPopover() {
+            const popover = document.getElementById('fmsApiLogPopover');
+            const button = document.getElementById('fmsApiLogBtn');
+
+            if (!button) return;
+
+            const rect = button.getBoundingClientRect();
+
+            // Position popover near the button
+            const left = Math.max(10, rect.left - 300);
+            const top = Math.max(10, rect.bottom + 5);
+
+            popover.style.left = `${left}px`;
+            popover.style.top = `${top}px`;
+            popover.style.display = 'block';
+
+            renderFmsApiLogs();
+        }
+
+        function closeFmsApiLogPopover() {
+            document.getElementById('fmsApiLogPopover').style.display = 'none';
+        }
+
+        function clearFmsApiLogs() {
+            fmsApiLogs = [];
+            renderFmsApiLogs();
+        }
+
+        function refreshFmsApiLogs() {
+            renderFmsApiLogs();
+        }
+
+        function addFmsApiLog(level, message) {
+            const timestamp = new Date().toISOString();
+            fmsApiLogs.push({ timestamp, level, message });
+
+            // Keep only last 100 logs
+            if (fmsApiLogs.length > 100) {
+                fmsApiLogs.shift();
+            }
+
+            // If popover is open, refresh it
+            if (document.getElementById('fmsApiLogPopover').style.display === 'block') {
+                renderFmsApiLogs();
+            }
+        }
+
+        function renderFmsApiLogs() {
+            const content = document.getElementById('fmsApiLogContent');
+
+            if (fmsApiLogs.length === 0) {
+                content.innerHTML = '<div style="color: #888;">No logs yet...</div>';
+                return;
+            }
+
+            const html = fmsApiLogs.map(log => {
+                let color = '#b0b0b0';
+                if (log.level === 'error') color = '#f44336';
+                else if (log.level === 'warning') color = '#ff9800';
+                else if (log.level === 'success') color = '#4caf50';
+
+                const time = new Date(log.timestamp).toLocaleTimeString();
+                return `<div style="color: ${color}; margin-bottom: 4px;">[${time}] ${log.message}</div>`;
+            }).join('');
+
+            content.innerHTML = html;
+            content.scrollTop = content.scrollHeight; // Scroll to bottom
+        }
+
+        function updateFmsApiStatus(connected, message = null) {
+            const dot = document.getElementById('fmsApiStatusDot');
+            const text = document.getElementById('fmsApiStatusText');
+            const spinner = document.getElementById('fmsApiStatusSpinner');
+
+            if (connected) {
+                dot.style.background = '#3a9e3a'; // Green
+                text.textContent = message || 'Connected';
+                text.style.color = '#3a9e3a';
+                spinner.style.display = 'none';
+                addFmsApiLog('success', message || 'Connected to FileMaker Server API');
+            } else {
+                dot.style.background = '#9e3a3a'; // Red
+                text.textContent = message || 'Not Connected';
+                text.style.color = '#9e3a3a';
+                spinner.style.display = 'inline';
+                if (message) {
+                    addFmsApiLog('error', message);
+                }
+            }
+        }
+
+        function updateConnectionTabApiDot(connIndex, connected) {
+            const connTab = state.connectionTabs[connIndex];
+            if (!connTab || !connTab.tabElement) return;
+
+            const fmStatusEl = connTab.tabElement.querySelector('.connection-tab-fm-status');
+            if (!fmStatusEl) return;
+
+            const fmApiDotEl = fmStatusEl.querySelector('.connection-tab-fm-api-dot');
+            const fmBridgeDotEl = fmStatusEl.querySelector('.connection-tab-fm-bridge-dot');
+
+            if (fmApiDotEl) {
+                fmApiDotEl.style.backgroundColor = connected ? '#3a9e3a' : '#9e3a3a';
+            }
+
+            // Update tooltip to show both statuses
+            const bridgeStatus = fmBridgeDotEl && fmBridgeDotEl.style.backgroundColor === 'rgb(58, 158, 58)' ? 'Connected' : 'Not Connected';
+            const apiStatus = connected ? 'Connected' : 'Not Connected';
+            fmStatusEl.title = `FileMaker Bridge - ${bridgeStatus} | API - ${apiStatus}`;
+        }
+
+        // Close popovers when clicking outside
+        document.addEventListener('click', function(event) {
+            const diskPopover = document.getElementById('diskPopover');
+            const diskContainer = document.getElementById('diskMetricContainer');
+
+            if (diskPopover && diskContainer &&
+                diskPopover.style.display === 'block' &&
+                !diskPopover.contains(event.target) &&
+                !diskContainer.contains(event.target)) {
                 closeDiskPopover();
+            }
+
+            const fmsLogPopover = document.getElementById('fmsApiLogPopover');
+            const fmsLogBtn = document.getElementById('fmsApiLogBtn');
+
+            if (fmsLogPopover && fmsLogBtn &&
+                fmsLogPopover.style.display === 'block' &&
+                !fmsLogPopover.contains(event.target) &&
+                !fmsLogBtn.contains(event.target)) {
+                closeFmsApiLogPopover();
             }
         });
 
@@ -10769,6 +11850,105 @@ Thumbs.db
             });
         }
 
+        // FileMaker Session Functions
+        function showFileMakerSessionModal() {
+            const modal = document.getElementById('newFileMakerSessionModal');
+            const connectionSelect = document.getElementById('fmConnectionSelect');
+
+            // Populate connections that have FileMaker bridge configured
+            connectionSelect.innerHTML = '<option value="">Select a connection with FileMaker bridge...</option>';
+            state.connections.forEach((conn, index) => {
+                if (conn.fileMakerPort) {
+                    const option = document.createElement('option');
+                    option.value = index;
+                    option.textContent = `${conn.name} (${conn.host}:${conn.fileMakerPort})`;
+                    connectionSelect.appendChild(option);
+                }
+            });
+
+            modal.style.display = 'flex';
+        }
+
+        function hideFileMakerSessionModal() {
+            document.getElementById('newFileMakerSessionModal').style.display = 'none';
+            document.getElementById('fileMakerSessionForm').reset();
+        }
+
+        async function createFileMakerSession(event) {
+            event.preventDefault();
+
+            const connIndex = parseInt(document.getElementById('fmConnectionSelect').value);
+            const filemakerFile = document.getElementById('fmFileSelect').value;
+            const initialPrompt = document.getElementById('fmInitialPrompt').value;
+
+            if (isNaN(connIndex) || !filemakerFile) {
+                showStatus('Please select a connection and FileMaker file', 'error');
+                return;
+            }
+
+            // Generate session ID
+            const sessionId = `fm-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+
+            // Create session (placeholder - will be connected to bridge later)
+            showStatus(`Creating FileMaker session: ${filemakerFile}`, 'info');
+
+            hideFileMakerSessionModal();
+
+            // TODO: Send to FileMaker bridge server
+            // For now, just show success
+            showStatus('FileMaker session created (bridge connection pending)', 'success');
+        }
+
+        function renderFileMakerSessions() {
+            const container = document.getElementById('filemakerSessionsList');
+            container.innerHTML = '';
+
+            // Placeholder - will fetch from FileMaker bridge
+            const noSessionsMsg = document.createElement('div');
+            noSessionsMsg.className = 'loading';
+            noSessionsMsg.textContent = 'No FileMaker sessions yet. Click "New FileMaker Session" to create one!';
+            noSessionsMsg.style.padding = '40px 20px';
+            noSessionsMsg.style.textAlign = 'center';
+            noSessionsMsg.style.color = '#888';
+            container.appendChild(noSessionsMsg);
+        }
+
+        // FileMaker Sub-Tab Switching
+        function initFmSubTabs() {
+            const fmSubTabs = document.querySelectorAll('.fm-subtab');
+            fmSubTabs.forEach(tab => {
+                tab.addEventListener('click', () => {
+                    const targetSubTab = tab.getAttribute('data-fm-subtab');
+
+                    // Update active tab styling
+                    fmSubTabs.forEach(t => {
+                        t.classList.remove('active');
+                        t.style.color = '#888';
+                        t.style.borderBottomColor = 'transparent';
+                        t.style.fontWeight = 'normal';
+                    });
+                    tab.classList.add('active');
+                    tab.style.color = '#e0e0e0';
+                    tab.style.borderBottomColor = '#9e6a3a';
+                    tab.style.fontWeight = '600';
+
+                    // Hide all FM sub-tab contents
+                    document.querySelectorAll('.fm-subtab-content').forEach(content => {
+                        content.style.display = 'none';
+                    });
+
+                    // Show selected sub-tab content
+                    if (targetSubTab === 'sessions') {
+                        document.getElementById('fmSessionsSubtab').style.display = 'flex';
+                    } else if (targetSubTab === 'scripts') {
+                        document.getElementById('fmScriptsSubtab').style.display = 'flex';
+                    } else if (targetSubTab === 'edit-scripts') {
+                        document.getElementById('fmEditScriptsSubtab').style.display = 'flex';
+                    }
+                });
+            });
+        }
+
         // Initialize
         window.addEventListener('DOMContentLoaded', async () => {
             // Load connections and preferences first
@@ -10790,6 +11970,7 @@ Thumbs.db
             initTerminal();
             initTabDragAndDrop();
             initConnectionTabDragAndDrop();
+            initFmSubTabs();
 
             // Auto-connect if enabled in preferences
             if (state.preferences.autoConnect) {
@@ -10880,6 +12061,155 @@ Thumbs.db
             document.getElementById('cancelCreateProjectBtn').addEventListener('click', hideCreateProjectModal);
             document.getElementById('cancelAssignSessionBtn').addEventListener('click', hideAssignSessionModal);
             document.getElementById('cancelAssignDirectoryBtn').addEventListener('click', hideAssignDirectoryModal);
+
+            // Add FileMaker session handlers
+            document.getElementById('newFileMakerSessionBtn').addEventListener('click', showFileMakerSessionModal);
+            document.getElementById('fileMakerSessionForm').addEventListener('submit', createFileMakerSession);
+
+            // Add FileMaker Bridge checkbox toggle handler
+            document.getElementById('connHasFileMaker').addEventListener('change', (e) => {
+                const fileMakerSettings = document.getElementById('fileMakerSettings');
+                fileMakerSettings.style.display = e.target.checked ? 'block' : 'none';
+            });
+
+            // Find Hosted Files button handler
+            document.getElementById('findHostedFilesBtn').addEventListener('click', async () => {
+                const fmsHost = document.getElementById('connFmsHost').value;
+                const adminUser = document.getElementById('connFmsAdminUsername').value;
+                const adminPass = document.getElementById('connFmsAdminPassword').value;
+
+                if (!fmsHost || !adminUser || !adminPass) {
+                    alert('Please enter FMS Host, Admin Username, and Admin Password first.');
+                    return;
+                }
+
+                // Need to send this request through the FileMaker Bridge WebSocket
+                // First, check if we have an active FM Bridge connection
+                let fmWs = null;
+                if (state.editingConnectionIndex !== null) {
+                    const connTab = state.connectionTabs[state.editingConnectionIndex];
+                    if (connTab && connTab.fmWebsocket && connTab.fmConnected) {
+                        fmWs = connTab.fmWebsocket;
+                    }
+                }
+
+                if (!fmWs) {
+                    alert('Please connect to the FileMaker Bridge first (save connection and connect).');
+                    return;
+                }
+
+                const btn = document.getElementById('findHostedFilesBtn');
+                const btnText = btn.querySelector('span:last-child');
+                const originalText = btnText.textContent;
+                btnText.textContent = 'Searching...';
+                btn.disabled = true;
+
+                // Set up one-time message handler for the response
+                const handleDatabaseList = (event) => {
+                    try {
+                        const data = JSON.parse(event.data);
+
+                        if (data.type === 'hosted_databases_list') {
+                            const databases = data.databases || [];
+
+                            if (databases.length === 0) {
+                                alert('No hosted databases found on this FileMaker Server.');
+                                btn.disabled = false;
+                                btnText.textContent = originalText;
+                                fmWs.removeEventListener('message', handleDatabaseList);
+                                return;
+                            }
+
+                            // Display the list of databases
+                            const container = document.getElementById('hostedFilesContainer');
+                            container.innerHTML = '';
+
+                            databases.forEach(dbName => {
+                                const radio = document.createElement('div');
+                                radio.style.cssText = 'padding: 6px 8px; margin: 4px 0; cursor: pointer; border-radius: 3px; transition: background 0.2s;';
+                                radio.innerHTML = `
+                                    <label style="cursor: pointer; display: flex; align-items: center; gap: 8px;">
+                                        <input type="radio" name="hostedFile" value="${dbName}" style="margin: 0;">
+                                        <span style="color: #e0e0e0;">${dbName}</span>
+                                    </label>
+                                `;
+
+                                radio.addEventListener('mouseenter', () => {
+                                    radio.style.background = '#2a2a2a';
+                                });
+                                radio.addEventListener('mouseleave', () => {
+                                    radio.style.background = 'transparent';
+                                });
+
+                                const input = radio.querySelector('input');
+                                input.addEventListener('change', () => {
+                                    document.getElementById('connFmsDatabase').value = dbName;
+                                });
+
+                                container.appendChild(radio);
+                            });
+
+                            document.getElementById('hostedFilesList').style.display = 'block';
+                            btnText.textContent = `Found ${databases.length} file(s)`;
+                            setTimeout(() => {
+                                btnText.textContent = originalText;
+                            }, 2000);
+
+                            btn.disabled = false;
+                            fmWs.removeEventListener('message', handleDatabaseList);
+                        }
+                        else if (data.type === 'hosted_databases_error') {
+                            alert(`Failed to fetch hosted files:\n${data.error}`);
+                            btnText.textContent = originalText;
+                            btn.disabled = false;
+                            fmWs.removeEventListener('message', handleDatabaseList);
+                        }
+                    } catch (error) {
+                        console.error('Error parsing database list response:', error);
+                    }
+                };
+
+                fmWs.addEventListener('message', handleDatabaseList);
+
+                // Send request to FileMaker Bridge
+                const request = {
+                    type: 'list_hosted_databases',
+                    fms_host: fmsHost,
+                    admin_username: adminUser,
+                    admin_password: adminPass
+                };
+                fmWs.send(JSON.stringify(request));
+            });
+
+            // Add FMS API Log button handler
+            document.getElementById('fmsApiLogBtn').addEventListener('click', showFmsApiLogPopover);
+
+            // Add FMS API Spinner (reconnect) handler
+            document.getElementById('fmsApiStatusSpinner').addEventListener('click', () => {
+                // Trigger reconnection by sending configure_fms message again
+                if (state.activeConnectionTab !== null) {
+                    const connTab = state.connectionTabs[state.activeConnectionTab];
+                    const conn = state.connections[state.activeConnectionTab];
+                    if (connTab && connTab.fmWebsocket && conn) {
+                        if (conn.fmsHost && conn.fmsDatabase && conn.fmsUsername && conn.fmsPassword) {
+                            const configMessage = {
+                                type: 'configure_fms',
+                                fms_host: conn.fmsHost,
+                                fms_database: conn.fmsDatabase,
+                                fms_username: conn.fmsUsername,
+                                fms_password: conn.fmsPassword
+                            };
+                            connTab.fmWebsocket.send(JSON.stringify(configMessage));
+                            updateFmsApiStatus(false, 'Reconnecting...');
+                            addFmsApiLog('info', 'Reconnection requested');
+                        } else {
+                            addFmsApiLog('error', 'FMS credentials not configured in connection settings');
+                        }
+                    } else {
+                        addFmsApiLog('error', 'FileMaker Bridge not connected');
+                    }
+                }
+            });
             document.getElementById('createProjectFromDirBtn').addEventListener('click', () => {
                 // Pre-fill create project modal with directory
                 hideAssignDirectoryModal();
@@ -10975,6 +12305,49 @@ Thumbs.db
             // Add deploy modal handlers
             document.getElementById('deployBtn').addEventListener('click', showDeployModal);
             document.getElementById('cancelDeployBtn').addEventListener('click', hideDeployModal);
+
+            // Start WebSocket debug monitoring if enabled
+            if (state.wsDebug) {
+                console.log('[WS-DEBUG] Debug monitoring enabled - stats will be logged every 5 seconds');
+                setInterval(() => {
+                    if (state.activeConnectionTab !== null) {
+                        const connTab = state.connectionTabs[state.activeConnectionTab];
+                        if (connTab && connTab.websocket && connTab.websocket.readyState === WebSocket.OPEN) {
+                            const ws = connTab.websocket;
+                            const conn = state.connections[state.activeConnectionTab];
+
+                            console.log(`[WS-DEBUG] === STATUS CHECK (${conn.name}) ===`);
+                            console.log(`[WS-DEBUG] Connection: OPEN`);
+                            console.log(`[WS-DEBUG] Pending messages: ${state.debugStats.pendingMessages}`);
+                            console.log(`[WS-DEBUG] Queue size: ${state.debugStats.messageQueue.length}`);
+                            console.log(`[WS-DEBUG] Buffered amount: ${ws.bufferedAmount} bytes`);
+                            console.log(`[WS-DEBUG] Total sent: ${(state.debugStats.totalBytesSent / 1024).toFixed(2)} KB`);
+                            console.log(`[WS-DEBUG] Total received: ${(state.debugStats.totalBytesReceived / 1024).toFixed(2)} KB`);
+
+                            if (state.debugStats.latencyHistory.length > 0) {
+                                const avgLatency = state.debugStats.latencyHistory.reduce((a,b)=>a+b,0) / state.debugStats.latencyHistory.length;
+                                const maxLatency = Math.max(...state.debugStats.latencyHistory);
+                                const minLatency = Math.min(...state.debugStats.latencyHistory);
+                                console.log(`[WS-DEBUG] Latency: avg=${avgLatency.toFixed(2)}ms, min=${minLatency.toFixed(2)}ms, max=${maxLatency.toFixed(2)}ms`);
+                            }
+
+                            // Warn if queue is getting large
+                            if (state.debugStats.pendingMessages > 5) {
+                                console.warn(`[WS-DEBUG] ⚠ Large queue depth: ${state.debugStats.pendingMessages} pending messages`);
+                            }
+
+                            // Warn if buffer is not draining
+                            if (ws.bufferedAmount > 1024) {
+                                console.warn(`[WS-DEBUG] ⚠ Large buffer: ${ws.bufferedAmount} bytes not sent`);
+                            }
+
+                            console.log(`[WS-DEBUG] ===================`);
+                        } else if (connTab && connTab.websocket) {
+                            console.warn(`[WS-DEBUG] Connection state: ${connTab.websocket.readyState}`);
+                        }
+                    }
+                }, 5000); // Every 5 seconds
+            }
 
             // Cleanup on page unload/refresh
             window.addEventListener('beforeunload', () => {
