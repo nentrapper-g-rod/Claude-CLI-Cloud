@@ -2185,7 +2185,8 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 host: document.getElementById('connHost').value,
                 port: parseInt(document.getElementById('connPort').value),
                 platform: document.getElementById('connPlatform').value,
-                autoConnect: document.getElementById('connAutoConnect').checked
+                autoConnect: document.getElementById('connAutoConnect').checked,
+                hasFileMaker: hasFileMaker
             };
 
             // Add FileMaker settings if enabled
