@@ -508,6 +508,12 @@ class FileMakerBridgeServer:
         elif msg_type == 'close_session':
             await self.handle_close_session(websocket, data)
 
+        elif msg_type == 'list_bridge_scripts':
+            await self.handle_list_bridge_scripts(websocket, data)
+
+        elif msg_type == 'get_bridge_script':
+            await self.handle_get_bridge_script(websocket, data)
+
         else:
             await self.send_error(websocket, f"Unknown message type: {msg_type}")
 
@@ -776,6 +782,95 @@ class FileMakerBridgeServer:
             "session_id": session_id
         }
         await websocket.send(json.dumps(response))
+
+    async def handle_list_bridge_scripts(self, websocket, data: Dict):
+        """List FileMaker Bridge scripts from /opt/FileMaker/FileMaker Server/Data/Documents/FM-Bridge-Scripts"""
+        scripts_dir = Path("/opt/FileMaker/FileMaker Server/Data/Documents/FM-Bridge-Scripts")
+
+        print(f"[{datetime.now().isoformat()}] Listing bridge scripts from {scripts_dir}")
+
+        try:
+            if not scripts_dir.exists():
+                print(f"Scripts directory does not exist: {scripts_dir}")
+                await websocket.send(json.dumps({
+                    "type": "bridge_scripts_list",
+                    "scripts": [],
+                    "error": "Scripts directory not found"
+                }))
+                return
+
+            # List all files in the scripts directory
+            scripts = []
+            for file_path in scripts_dir.iterdir():
+                if file_path.is_file():
+                    stat_info = file_path.stat()
+                    scripts.append({
+                        "name": file_path.name,
+                        "path": str(file_path),
+                        "size": stat_info.st_size,
+                        "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                        "extension": file_path.suffix
+                    })
+
+            # Sort by name
+            scripts.sort(key=lambda x: x['name'])
+
+            print(f"✓ Found {len(scripts)} bridge scripts")
+            await websocket.send(json.dumps({
+                "type": "bridge_scripts_list",
+                "scripts": scripts,
+                "directory": str(scripts_dir)
+            }))
+
+        except Exception as e:
+            error_msg = str(e)
+            print(f"✗ Failed to list bridge scripts: {error_msg}")
+            await websocket.send(json.dumps({
+                "type": "bridge_scripts_error",
+                "error": error_msg
+            }))
+
+    async def handle_get_bridge_script(self, websocket, data: Dict):
+        """Get contents of a specific bridge script"""
+        script_name = data.get('script_name')
+        scripts_dir = Path("/opt/FileMaker/FileMaker Server/Data/Documents/FM-Bridge-Scripts")
+
+        if not script_name:
+            await self.send_error(websocket, "Missing script_name")
+            return
+
+        script_path = scripts_dir / script_name
+
+        print(f"[{datetime.now().isoformat()}] Reading bridge script: {script_path}")
+
+        try:
+            if not script_path.exists() or not script_path.is_file():
+                print(f"Script not found: {script_path}")
+                await websocket.send(json.dumps({
+                    "type": "bridge_script_error",
+                    "error": f"Script not found: {script_name}"
+                }))
+                return
+
+            # Read script contents
+            async with aiofiles.open(script_path, 'r') as f:
+                content = await f.read()
+
+            print(f"✓ Read bridge script: {script_name} ({len(content)} bytes)")
+            await websocket.send(json.dumps({
+                "type": "bridge_script_content",
+                "script_name": script_name,
+                "content": content,
+                "path": str(script_path)
+            }))
+
+        except Exception as e:
+            error_msg = str(e)
+            print(f"✗ Failed to read bridge script: {error_msg}")
+            await websocket.send(json.dumps({
+                "type": "bridge_script_error",
+                "error": error_msg
+            }))
 
     async def start_server(self, host: str = '0.0.0.0', port: int = 8767):
         """Start the WebSocket server"""

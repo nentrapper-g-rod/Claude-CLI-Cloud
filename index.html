@@ -1701,14 +1701,17 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
 
                 <!-- Edit Scripts Sub-Tab -->
                 <div id="fmEditScriptsSubtab" class="fm-subtab-content" style="display: none; flex-direction: column; height: calc(100% - 45px);">
-                    <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
-                        <button id="newFmScriptBtn" style="width: 100%; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                    <div style="padding: 10px; border-bottom: 1px solid #3a3a3a; display: flex; gap: 10px;">
+                        <button id="refreshBridgeScriptsBtn" style="flex: 1; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            🔄 Refresh
+                        </button>
+                        <button id="newFmScriptBtn" style="flex: 1; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
                             ➕ New Script
                         </button>
                     </div>
-                    <div id="fmEditScriptsList" style="flex: 1; overflow-y: auto; padding: 10px;">
+                    <div id="bridgeScriptsList" style="flex: 1; overflow-y: auto; padding: 10px;">
                         <div style="color: #888; text-align: center; padding: 20px;">
-                            Create or edit FileMaker scripts
+                            Click "Refresh" to load scripts from FM-Bridge-Scripts directory
                         </div>
                     </div>
                 </div>
@@ -4274,6 +4277,19 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                         updateFmsApiStatus(false, `Error: ${data.error}`);
                         // Also update the connection tab API dot
                         updateConnectionTabApiDot(connIndex, false);
+                    }
+                    // Handle bridge scripts list
+                    else if (data.type === 'bridge_scripts_list') {
+                        displayBridgeScripts(data.scripts, data.directory);
+                    }
+                    // Handle bridge script content
+                    else if (data.type === 'bridge_script_content') {
+                        displayBridgeScriptContent(data.script_name, data.content, data.path);
+                    }
+                    // Handle bridge scripts errors
+                    else if (data.type === 'bridge_scripts_error' || data.type === 'bridge_script_error') {
+                        console.error('Bridge scripts error:', data.error);
+                        alert(`Error: ${data.error}`);
                     }
                     // Handle other FileMaker Bridge messages here
                 } catch (e) {
@@ -11913,6 +11929,104 @@ Thumbs.db
             container.appendChild(noSessionsMsg);
         }
 
+        // Request bridge scripts list from FM Bridge
+        function refreshBridgeScripts() {
+            if (state.activeConnectionTab === null) {
+                alert('No active connection');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.fmWebsocket) {
+                alert('FileMaker Bridge not connected');
+                return;
+            }
+
+            console.log('Requesting bridge scripts list...');
+            connTab.fmWebsocket.send(JSON.stringify({
+                type: 'list_bridge_scripts'
+            }));
+        }
+
+        // Display bridge scripts list
+        function displayBridgeScripts(scripts, directory) {
+            const container = document.getElementById('bridgeScriptsList');
+            if (!container) return;
+
+            console.log(`Displaying ${scripts.length} bridge scripts from ${directory}`);
+
+            if (scripts.length === 0) {
+                container.innerHTML = `
+                    <div style="color: #888; text-align: center; padding: 20px;">
+                        No scripts found in ${directory}
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `<div style="font-size: 11px; color: #666; margin-bottom: 10px; padding: 5px; background: #1a1a1a; border-radius: 3px;">
+                📁 ${directory} (${scripts.length} files)
+            </div>`;
+
+            scripts.forEach(script => {
+                const sizeKB = (script.size / 1024).toFixed(1);
+                const modDate = new Date(script.modified).toLocaleString();
+
+                html += `
+                    <div class="script-item" style="padding: 10px; margin-bottom: 5px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 5px; cursor: pointer; transition: background 0.2s;"
+                         onclick="requestBridgeScript('${script.name}')"
+                         onmouseover="this.style.background='#3a3a3a'"
+                         onmouseout="this.style.background='#2a2a2a'">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <div style="color: #e0e0e0; font-weight: 600; font-size: 13px; margin-bottom: 3px;">
+                                    📄 ${script.name}
+                                </div>
+                                <div style="color: #888; font-size: 11px;">
+                                    ${sizeKB} KB • Modified: ${modDate}
+                                </div>
+                            </div>
+                            <div style="color: #9e6a3a; font-size: 11px;">
+                                ${script.extension || ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Request specific bridge script content
+        function requestBridgeScript(scriptName) {
+            if (state.activeConnectionTab === null) {
+                alert('No active connection');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.fmWebsocket) {
+                alert('FileMaker Bridge not connected');
+                return;
+            }
+
+            console.log(`Requesting bridge script: ${scriptName}`);
+            connTab.fmWebsocket.send(JSON.stringify({
+                type: 'get_bridge_script',
+                script_name: scriptName
+            }));
+        }
+
+        // Display bridge script content (placeholder - can be enhanced with editor)
+        function displayBridgeScriptContent(scriptName, content, path) {
+            console.log(`Received script: ${scriptName} (${content.length} bytes)`);
+
+            // For now, show in an alert or modal
+            // TODO: Could open in a code editor modal
+            const preview = content.length > 500 ? content.substring(0, 500) + '\n\n... (truncated)' : content;
+            alert(`Script: ${scriptName}\nPath: ${path}\n\n${preview}`);
+        }
+
         // FileMaker Sub-Tab Switching
         function initFmSubTabs() {
             const fmSubTabs = document.querySelectorAll('.fm-subtab');
@@ -12065,6 +12179,7 @@ Thumbs.db
             // Add FileMaker session handlers
             document.getElementById('newFileMakerSessionBtn').addEventListener('click', showFileMakerSessionModal);
             document.getElementById('fileMakerSessionForm').addEventListener('submit', createFileMakerSession);
+            document.getElementById('refreshBridgeScriptsBtn').addEventListener('click', refreshBridgeScripts);
 
             // Add FileMaker Bridge checkbox toggle handler
             document.getElementById('connHasFileMaker').addEventListener('change', (e) => {
