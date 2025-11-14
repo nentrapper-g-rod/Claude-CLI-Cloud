@@ -1974,7 +1974,10 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 autoConnect: false,
                 openTabs: {},           // Map: connIndex -> array of tab data
                 sidebarWidth: 300
-            }
+            },
+
+            // FileMaker bridge scripts cache per connection
+            bridgeScriptsCache: {}      // Map: connIndex -> { scripts: [], directory: '', lastUpdated: timestamp }
         };
 
         // Generate distinct colors for sessions
@@ -4285,6 +4288,12 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     fmWs.send(JSON.stringify(configMessage));
                     console.log(`Sent FMS configuration to FileMaker Bridge: ${conn.fmsHost} / ${conn.fmsDatabase}`);
                 }
+
+                // Auto-refresh bridge scripts when connecting
+                console.log('Auto-refreshing bridge scripts on connection...');
+                setTimeout(() => {
+                    fmWs.send(JSON.stringify({ type: 'list_bridge_scripts' }));
+                }, 500); // Small delay to ensure connection is fully established
             };
 
             fmWs.onmessage = (event) => {
@@ -11959,6 +11968,19 @@ Thumbs.db
             container.appendChild(noSessionsMsg);
         }
 
+        // Load cached bridge scripts if available
+        function loadCachedBridgeScripts() {
+            if (state.activeConnectionTab === null) return false;
+
+            const cached = state.bridgeScriptsCache[state.activeConnectionTab];
+            if (cached && cached.scripts) {
+                console.log(`Loading ${cached.scripts.length} cached scripts for connection ${state.activeConnectionTab}`);
+                displayBridgeScripts(cached.scripts, cached.directory);
+                return true;
+            }
+            return false;
+        }
+
         // Request bridge scripts list from FM Bridge
         function refreshBridgeScripts() {
             if (state.activeConnectionTab === null) {
@@ -11984,6 +12006,16 @@ Thumbs.db
             if (!container) return;
 
             console.log(`Displaying ${scripts.length} bridge scripts from ${directory}`);
+
+            // Cache the scripts for the active connection
+            if (state.activeConnectionTab !== null) {
+                state.bridgeScriptsCache[state.activeConnectionTab] = {
+                    scripts: scripts,
+                    directory: directory,
+                    lastUpdated: Date.now()
+                };
+                console.log(`Cached ${scripts.length} scripts for connection ${state.activeConnectionTab}`);
+            }
 
             if (scripts.length === 0) {
                 container.innerHTML = `
@@ -12088,6 +12120,8 @@ Thumbs.db
                         document.getElementById('fmScriptsSubtab').style.display = 'flex';
                     } else if (targetSubTab === 'edit-scripts') {
                         document.getElementById('fmEditScriptsSubtab').style.display = 'flex';
+                        // Load cached scripts when switching to Edit Scripts tab
+                        loadCachedBridgeScripts();
                     }
                 });
             });
