@@ -2686,10 +2686,13 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                 // Show/hide FileMaker tab based on connection settings
                 const filemakerBtn = document.getElementById('filemakerSubtabBtn');
                 if (filemakerBtn) {
+                    console.log(`Connection ${conn.name}: hasFileMaker = ${conn.hasFileMaker}, fileMakerPort = ${conn.fileMakerPort}`);
                     if (conn.hasFileMaker) {
                         filemakerBtn.style.display = 'flex';
+                        console.log('FileMaker tab shown');
                     } else {
                         filemakerBtn.style.display = 'none';
+                        console.log('FileMaker tab hidden');
                     }
                 }
 
