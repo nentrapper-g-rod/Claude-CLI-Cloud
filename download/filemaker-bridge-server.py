@@ -514,6 +514,12 @@ class FileMakerBridgeServer:
         elif msg_type == 'get_bridge_script':
             await self.handle_get_bridge_script(websocket, data)
 
+        elif msg_type == 'list_backups':
+            await self.handle_list_backups(websocket, data)
+
+        elif msg_type == 'get_backup':
+            await self.handle_get_backup(websocket, data)
+
         else:
             await self.send_error(websocket, f"Unknown message type: {msg_type}")
 
@@ -869,6 +875,93 @@ class FileMakerBridgeServer:
             print(f"✗ Failed to read bridge script: {error_msg}")
             await websocket.send(json.dumps({
                 "type": "bridge_script_error",
+                "error": error_msg
+            }))
+
+    async def handle_list_backups(self, websocket, data: Dict):
+        """List FileMaker backups from /opt/FileMaker/FileMaker Server/Data/Documents/FM-Bridge-Scripts/backups"""
+        scripts_dir = Path("/opt/FileMaker/FileMaker Server/Data/Documents/FM-Bridge-Scripts")
+        backups_dir = scripts_dir / "backups"
+
+        print(f"[{datetime.now().isoformat()}] Listing backups from {backups_dir}")
+
+        try:
+            # Create backups directory if it doesn't exist
+            if not backups_dir.exists():
+                backups_dir.mkdir(parents=True, exist_ok=True)
+                print(f"Created backups directory: {backups_dir}")
+
+            # List all files in the backups directory
+            backups = []
+            for file_path in backups_dir.iterdir():
+                if file_path.is_file():
+                    stat_info = file_path.stat()
+                    backups.append({
+                        "name": file_path.name,
+                        "path": str(file_path),
+                        "size": stat_info.st_size,
+                        "modified": datetime.fromtimestamp(stat_info.st_mtime).isoformat(),
+                        "extension": file_path.suffix
+                    })
+
+            # Sort by modified date (newest first)
+            backups.sort(key=lambda x: x['modified'], reverse=True)
+
+            print(f"✓ Found {len(backups)} backups")
+            await websocket.send(json.dumps({
+                "type": "backups_list",
+                "backups": backups,
+                "directory": str(backups_dir)
+            }))
+
+        except Exception as e:
+            error_msg = str(e)
+            print(f"✗ Failed to list backups: {error_msg}")
+            await websocket.send(json.dumps({
+                "type": "backups_error",
+                "error": error_msg
+            }))
+
+    async def handle_get_backup(self, websocket, data: Dict):
+        """Get contents of a specific backup file"""
+        backup_name = data.get('backup_name')
+        scripts_dir = Path("/opt/FileMaker/FileMaker Server/Data/Documents/FM-Bridge-Scripts")
+        backups_dir = scripts_dir / "backups"
+
+        if not backup_name:
+            await self.send_error(websocket, "Missing backup_name")
+            return
+
+        backup_path = backups_dir / backup_name
+
+        print(f"[{datetime.now().isoformat()}] Reading backup: {backup_path}")
+
+        try:
+            if not backup_path.exists() or not backup_path.is_file():
+                print(f"Backup not found: {backup_path}")
+                await websocket.send(json.dumps({
+                    "type": "backup_error",
+                    "error": f"Backup not found: {backup_name}"
+                }))
+                return
+
+            # Read backup contents
+            async with aiofiles.open(backup_path, 'r') as f:
+                content = await f.read()
+
+            print(f"✓ Read backup: {backup_name} ({len(content)} bytes)")
+            await websocket.send(json.dumps({
+                "type": "backup_content",
+                "backup_name": backup_name,
+                "content": content,
+                "path": str(backup_path)
+            }))
+
+        except Exception as e:
+            error_msg = str(e)
+            print(f"✗ Failed to read backup: {error_msg}")
+            await websocket.send(json.dumps({
+                "type": "backup_error",
                 "error": error_msg
             }))
 

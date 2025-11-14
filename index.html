@@ -1669,6 +1669,9 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     <button class="fm-subtab" data-fm-subtab="edit-scripts" style="flex: 1; padding: 10px; background: transparent; color: #888; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 13px;">
                         Edit Scripts
                     </button>
+                    <button class="fm-subtab" data-fm-subtab="backups" style="flex: 1; padding: 10px; background: transparent; color: #888; border: none; border-bottom: 2px solid transparent; cursor: pointer; font-size: 13px;">
+                        Backups
+                    </button>
                 </div>
 
                 <!-- Sessions Sub-Tab -->
@@ -1712,6 +1715,20 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     <div id="bridgeScriptsList" style="flex: 1; overflow-y: auto; padding: 10px;">
                         <div style="color: #888; text-align: center; padding: 20px;">
                             Click "Refresh" to load scripts from FM-Bridge-Scripts directory
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Backups Sub-Tab -->
+                <div id="fmBackupsSubtab" class="fm-subtab-content" style="display: none; flex-direction: column; height: calc(100% - 45px);">
+                    <div style="padding: 10px; border-bottom: 1px solid #3a3a3a;">
+                        <button id="refreshBackupsBtn" style="width: 100%; padding: 12px; background: #3a9e3a; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: 600; font-size: 14px;">
+                            🔄 Refresh Backups
+                        </button>
+                    </div>
+                    <div id="backupsList" style="flex: 1; overflow-y: auto; padding: 10px;">
+                        <div style="color: #888; text-align: center; padding: 20px;">
+                            Click "Refresh Backups" to load from backups directory
                         </div>
                     </div>
                 </div>
@@ -1977,7 +1994,10 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
             },
 
             // FileMaker bridge scripts cache per connection
-            bridgeScriptsCache: {}      // Map: connIndex -> { scripts: [], directory: '', lastUpdated: timestamp }
+            bridgeScriptsCache: {},     // Map: connIndex -> { scripts: [], directory: '', lastUpdated: timestamp }
+
+            // FileMaker backups cache per connection
+            backupsCache: {}            // Map: connIndex -> { backups: [], directory: '', lastUpdated: timestamp }
         };
 
         // Generate distinct colors for sessions
@@ -4289,10 +4309,11 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     console.log(`Sent FMS configuration to FileMaker Bridge: ${conn.fmsHost} / ${conn.fmsDatabase}`);
                 }
 
-                // Auto-refresh bridge scripts when connecting
-                console.log('Auto-refreshing bridge scripts on connection...');
+                // Auto-refresh bridge scripts and backups when connecting
+                console.log('Auto-refreshing bridge scripts and backups on connection...');
                 setTimeout(() => {
                     fmWs.send(JSON.stringify({ type: 'list_bridge_scripts' }));
+                    fmWs.send(JSON.stringify({ type: 'list_backups' }));
                 }, 500); // Small delay to ensure connection is fully established
             };
 
@@ -4328,6 +4349,19 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     // Handle bridge scripts errors
                     else if (data.type === 'bridge_scripts_error' || data.type === 'bridge_script_error') {
                         console.error('Bridge scripts error:', data.error);
+                        alert(`Error: ${data.error}`);
+                    }
+                    // Handle backups list
+                    else if (data.type === 'backups_list') {
+                        displayBackups(data.backups, data.directory);
+                    }
+                    // Handle backup content
+                    else if (data.type === 'backup_content') {
+                        displayBackupContent(data.backup_name, data.content, data.path);
+                    }
+                    // Handle backups errors
+                    else if (data.type === 'backups_error' || data.type === 'backup_error') {
+                        console.error('Backups error:', data.error);
                         alert(`Error: ${data.error}`);
                     }
                     // Handle other FileMaker Bridge messages here
@@ -12089,6 +12123,127 @@ Thumbs.db
             alert(`Script: ${scriptName}\nPath: ${path}\n\n${preview}`);
         }
 
+        // ===== Backups Functions =====
+
+        // Load cached backups if available
+        function loadCachedBackups() {
+            if (state.activeConnectionTab === null) return false;
+
+            const cached = state.backupsCache[state.activeConnectionTab];
+            if (cached && cached.backups) {
+                console.log(`Loading ${cached.backups.length} cached backups for connection ${state.activeConnectionTab}`);
+                displayBackups(cached.backups, cached.directory);
+                return true;
+            }
+            return false;
+        }
+
+        // Request backups list from FM Bridge
+        function refreshBackups() {
+            if (state.activeConnectionTab === null) {
+                alert('No active connection');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.fmWebsocket) {
+                alert('FileMaker Bridge not connected');
+                return;
+            }
+
+            console.log('Requesting backups list...');
+            connTab.fmWebsocket.send(JSON.stringify({
+                type: 'list_backups'
+            }));
+        }
+
+        // Display backups list
+        function displayBackups(backups, directory) {
+            const container = document.getElementById('backupsList');
+            if (!container) return;
+
+            console.log(`Displaying ${backups.length} backups from ${directory}`);
+
+            // Cache the backups for the active connection
+            if (state.activeConnectionTab !== null) {
+                state.backupsCache[state.activeConnectionTab] = {
+                    backups: backups,
+                    directory: directory,
+                    lastUpdated: Date.now()
+                };
+                console.log(`Cached ${backups.length} backups for connection ${state.activeConnectionTab}`);
+            }
+
+            if (backups.length === 0) {
+                container.innerHTML = `
+                    <div style="color: #888; text-align: center; padding: 20px;">
+                        No backups found in ${directory}
+                    </div>
+                `;
+                return;
+            }
+
+            let html = `<div style="font-size: 11px; color: #666; margin-bottom: 10px; padding: 5px; background: #1a1a1a; border-radius: 3px;">
+                📁 ${directory} (${backups.length} files)
+            </div>`;
+
+            backups.forEach(backup => {
+                const sizeKB = (backup.size / 1024).toFixed(1);
+                const modDate = new Date(backup.modified).toLocaleString();
+
+                html += `
+                    <div class="backup-item" style="padding: 10px; margin-bottom: 5px; background: #2a2a2a; border: 1px solid #3a3a3a; border-radius: 5px; cursor: pointer; transition: background 0.2s;"
+                         onclick="requestBackup('${backup.name}')"
+                         onmouseover="this.style.background='#3a3a3a'"
+                         onmouseout="this.style.background='#2a2a2a'">
+                        <div style="display: flex; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1;">
+                                <div style="color: #e0e0e0; font-weight: 600; font-size: 13px; margin-bottom: 3px;">
+                                    💾 ${backup.name}
+                                </div>
+                                <div style="color: #888; font-size: 11px;">
+                                    ${sizeKB} KB • Modified: ${modDate}
+                                </div>
+                            </div>
+                            <div style="color: #9e6a3a; font-size: 11px;">
+                                ${backup.extension || ''}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        // Request specific backup content
+        function requestBackup(backupName) {
+            if (state.activeConnectionTab === null) {
+                alert('No active connection');
+                return;
+            }
+
+            const connTab = state.connectionTabs[state.activeConnectionTab];
+            if (!connTab || !connTab.fmWebsocket) {
+                alert('FileMaker Bridge not connected');
+                return;
+            }
+
+            console.log(`Requesting backup: ${backupName}`);
+            connTab.fmWebsocket.send(JSON.stringify({
+                type: 'get_backup',
+                backup_name: backupName
+            }));
+        }
+
+        // Display backup content
+        function displayBackupContent(backupName, content, path) {
+            console.log(`Received backup: ${backupName} (${content.length} bytes)`);
+
+            const preview = content.length > 500 ? content.substring(0, 500) + '\n\n... (truncated)' : content;
+            alert(`Backup: ${backupName}\nPath: ${path}\n\n${preview}`);
+        }
+
         // FileMaker Sub-Tab Switching
         function initFmSubTabs() {
             const fmSubTabs = document.querySelectorAll('.fm-subtab');
@@ -12122,6 +12277,10 @@ Thumbs.db
                         document.getElementById('fmEditScriptsSubtab').style.display = 'flex';
                         // Load cached scripts when switching to Edit Scripts tab
                         loadCachedBridgeScripts();
+                    } else if (targetSubTab === 'backups') {
+                        document.getElementById('fmBackupsSubtab').style.display = 'flex';
+                        // Load cached backups when switching to Backups tab
+                        loadCachedBackups();
                     }
                 });
             });
@@ -12244,6 +12403,7 @@ Thumbs.db
             document.getElementById('newFileMakerSessionBtn').addEventListener('click', showFileMakerSessionModal);
             document.getElementById('fileMakerSessionForm').addEventListener('submit', createFileMakerSession);
             document.getElementById('refreshBridgeScriptsBtn').addEventListener('click', refreshBridgeScripts);
+            document.getElementById('refreshBackupsBtn').addEventListener('click', refreshBackups);
 
             // Add FileMaker Bridge checkbox toggle handler
             document.getElementById('connHasFileMaker').addEventListener('change', (e) => {
