@@ -283,7 +283,7 @@ class FileMakerBridgeServer:
 
         # Heartbeat task to keep FMS API connection alive
         self.heartbeat_task = None
-        self.heartbeat_interval = 300  # 5 minutes (FMS tokens typically expire after 15 minutes)
+        self.heartbeat_interval = 60  # 60 seconds to keep session active in FMS Admin Console
 
     async def keep_fms_connection_alive(self):
         """Background task to keep FMS API connection alive"""
@@ -293,11 +293,15 @@ class FileMakerBridgeServer:
 
                 if self.persistent_fms_api and self.persistent_fms_api.token:
                     print(f"[{datetime.now().isoformat()}] FMS API heartbeat - checking connection...")
+                    print(f"  Token: {self.persistent_fms_api.token[:20]}...")
+                    print(f"  Database: {self.persistent_fms_api.database}")
+                    print(f"  Host: {self.persistent_fms_api.host}")
 
                     try:
                         # Test the connection by getting layouts (lightweight operation)
                         layouts = await self.persistent_fms_api.get_layouts()
                         print(f"✓ FMS API connection alive - {len(layouts)} layouts available")
+                        print(f"✓ Session active in FileMaker Server")
 
                         # Notify all connected clients that API is still connected
                         for client in self.clients:
