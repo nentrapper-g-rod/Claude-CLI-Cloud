@@ -67,14 +67,38 @@ class FileMakerDataAPI:
             "Content-Type": "application/json"
         }
 
+        print(f"\n{'='*60}")
+        print(f"FileMaker Data API - Login Request")
+        print(f"{'='*60}")
+        print(f"  Method: POST")
+        print(f"  URL: {url}")
+        print(f"  Headers: {{'Authorization': 'Basic ***', 'Content-Type': 'application/json'}}")
+        print(f"  Body: {{}}")
+        print(f"  User: {self.username}")
+        print(f"  Database: {self.database}")
+
         async with self.session.post(url, headers=headers, json={}, ssl=False) as response:
+            print(f"\nFileMaker Data API - Login Response")
+            print(f"  Status: {response.status}")
+            print(f"  Reason: {response.reason}")
+
             if response.status == 200:
                 data = await response.json()
                 self.token = data['response']['token']
-                print(f"FileMaker Data API: Logged in successfully")
+
+                print(f"  Response Body:")
+                print(f"    messages: {data.get('messages', [])}")
+                print(f"    response.token: {self.token}")
+                print(f"\n✓ FileMaker Data API: Login successful!")
+                print(f"  Session Token: {self.token}")
+                print(f"{'='*60}\n")
+
                 return self.token
             else:
                 error_text = await response.text()
+                print(f"  Error Response: {error_text}")
+                print(f"✗ FileMaker Data API: Login failed!")
+                print(f"{'='*60}\n")
                 raise Exception(f"FileMaker login failed: {response.status} - {error_text}")
 
     async def logout(self):
@@ -85,10 +109,30 @@ class FileMakerDataAPI:
         url = f"{self.base_url}/databases/{self.database}/sessions/{self.token}"
         headers = {"Content-Type": "application/json"}
 
+        print(f"\n{'='*60}")
+        print(f"FileMaker Data API - Logout Request")
+        print(f"{'='*60}")
+        print(f"  Method: DELETE")
+        print(f"  URL: {url}")
+        print(f"  Token: {self.token}")
+
         async with self.session.delete(url, headers=headers, ssl=False) as response:
+            print(f"\nFileMaker Data API - Logout Response")
+            print(f"  Status: {response.status}")
+            print(f"  Reason: {response.reason}")
+
             if response.status == 200:
-                print(f"FileMaker Data API: Logged out successfully")
+                data = await response.json()
+                print(f"  Response Body:")
+                print(f"    messages: {data.get('messages', [])}")
+                print(f"\n✓ FileMaker Data API: Logout successful!")
+                print(f"{'='*60}\n")
                 self.token = None
+            else:
+                error_text = await response.text()
+                print(f"  Error Response: {error_text}")
+                print(f"✗ FileMaker Data API: Logout failed!")
+                print(f"{'='*60}\n")
 
     async def get_records(self, layout: str, offset: int = 1, limit: int = 100, query: dict = None):
         """Get records from a layout"""
@@ -208,12 +252,22 @@ class FileMakerDataAPI:
             "Content-Type": "application/json"
         }
 
+        print(f"\nFileMaker Data API - Get Layouts Request")
+        print(f"  Method: GET")
+        print(f"  URL: {url}")
+        print(f"  Token: {self.token[:20]}...")
+
         async with self.session.get(url, headers=headers, ssl=False) as response:
+            print(f"  Response Status: {response.status}")
+
             if response.status == 200:
                 data = await response.json()
-                return data['response']['layouts']
+                layouts = data['response']['layouts']
+                print(f"  ✓ Retrieved {len(layouts)} layouts")
+                return layouts
             else:
                 error_text = await response.text()
+                print(f"  ✗ Error: {error_text}")
                 raise Exception(f"Get layouts failed: {response.status} - {error_text}")
 
 
