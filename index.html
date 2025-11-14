@@ -2009,6 +2009,21 @@ Select-String -Path C:\ProgramData\claude-bridge\bridge.log -Pattern "DEBUG"    
                     const data = await response.json();
                     if (data && data.length > 0) {
                         state.connections = data;
+
+                        // Migration: Set hasFileMaker = true for connections with fileMakerPort
+                        let needsSave = false;
+                        state.connections.forEach(conn => {
+                            if (conn.fileMakerPort && conn.hasFileMaker === undefined) {
+                                conn.hasFileMaker = true;
+                                needsSave = true;
+                                console.log(`Migration: Set hasFileMaker=true for ${conn.name}`);
+                            }
+                        });
+
+                        // Save if we migrated any connections
+                        if (needsSave) {
+                            await saveConnections();
+                        }
                     } else {
                         // Default connection - current host
                         state.connections = [{
